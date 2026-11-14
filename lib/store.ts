@@ -5,7 +5,20 @@
  * React only re-renders the small components that subscribe to a slice.
  */
 import { useSyncExternalStore } from "react";
-import { EXAGGERATION_DEFAULT, SUN_DEFAULT, type BaseLayer } from "./lunar-config";
+import { EXAGGERATION_DEFAULT, type BaseLayer } from "./lunar-config";
+import type { EllipseResult, EllipseSpec } from "./planning";
+
+export type PlanStep = "date" | "draw" | "results";
+export type AnalysisLayer =
+  | "none"
+  | "now-sun"
+  | "now-earth"
+  | "mission-sun"
+  | "mission-earth"
+  | "mission-night"
+  | "annual-sun"
+  | "annual-earth"
+  | "annual-night";
 
 export type ViewMode = "global" | "approach" | "terrain";
 
@@ -37,8 +50,20 @@ export interface AppState {
   baseLayer: BaseLayer;
   psrOverlay: boolean;
   exaggeration: number;
-  sunAzimuthDeg: number;
-  sunElevationDeg: number;
+  /* ---- mission planning */
+  planStep: PlanStep;
+  landingMs: number | null;
+  missionDays: number;
+  /** Time shown by the slider / used for lighting (null = real current time). */
+  timeMs: number | null;
+  playing: boolean;
+  ellipse: EllipseSpec | null;
+  drawing: boolean;
+  analysisLayer: AnalysisLayer;
+  analysis: EllipseResult | null;
+  analysisProgress: { value: number; label: string } | null;
+  missionLayersReady: boolean;
+  analysisError: string | null;
   viewMode: ViewMode;
   /** 0 = global, 1 = fully pole-focused (from camera distance). */
   poleFocus: number;
@@ -56,8 +81,18 @@ const initial: AppState = {
   baseLayer: "hillshade",
   psrOverlay: false,
   exaggeration: EXAGGERATION_DEFAULT,
-  sunAzimuthDeg: SUN_DEFAULT.azimuthDeg,
-  sunElevationDeg: SUN_DEFAULT.elevationDeg,
+  planStep: "date",
+  landingMs: null,
+  missionDays: 14,
+  timeMs: null,
+  playing: false,
+  ellipse: null,
+  drawing: false,
+  analysisLayer: "none",
+  analysis: null,
+  analysisProgress: null,
+  missionLayersReady: false,
+  analysisError: null,
   viewMode: "global",
   poleFocus: 0,
   altitudeKm: 0,

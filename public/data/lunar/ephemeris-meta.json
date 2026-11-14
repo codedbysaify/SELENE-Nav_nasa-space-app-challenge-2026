@@ -1,0 +1,48 @@
+{
+  "file": "ephemeris-hourly.f32",
+  "start_utc": "2026-11-01T00:00:00Z",
+  "step_hours": 1,
+  "count": 80352,
+  "fields": [
+    "subsolar_lat_deg",
+    "subsolar_lon_deg",
+    "subearth_lat_deg",
+    "subearth_lon_deg",
+    "earth_distance_km"
+  ],
+  "dtype": "float32 little-endian, row-major",
+  "frame": "MOON_ME (DE421 lunar orientation), longitudes east-positive",
+  "sources": {
+    "planetary_ephemeris": "NASA JPL DE440 (de440s.bsp, NAIF)",
+    "lunar_orientation": "NASA JPL DE421 lunar PA + moon_080317.tf (NAIF)",
+    "library": "Skyfield"
+  },
+  "notes": "Geometric directions from the Moon's centre. The browser applies the Earth parallax correction (R/d) and the terrain horizon.",
+  "validation": {
+    "svs_mooninfo_2026": {
+      "hours_compared": 8760,
+      "subsolar_max_dlat_deg": 0.0006751712032719015,
+      "subsolar_max_dlon_deg": 0.006322863916011556,
+      "subearth_max_dlat_deg": 0.0005215956176227721,
+      "subearth_max_dlon_deg": 0.0005268017426658389
+    },
+    "jpl_horizons": {
+      "dates_compared": 7,
+      "max_diff_deg": 0.0057830810546875
+    },
+    "self_tests": {
+      "sun_at_subsolar_point_deg": 90.0,
+      "earth_at_subearth_point_deg": 90.0,
+      "pole_identity_max_err_deg": 4.750744695414255e-07,
+      "earth_elev_at_pole_range_deg": [
+        -6.859518051147461,
+        6.863166332244873
+      ],
+      "sun_elev_at_pole_range_deg": [
+        -1.5796221494674683,
+        1.5880382061004639
+      ]
+    }
+  },
+  "generated_utc": "2026-11-14T11:38:57+00:00"
+}

@@ -2,7 +2,7 @@
 
 @theme {
   --color-space: #030509;
-  --color-panel: rgb(8 12 18 / 0.88);
+  --color-panel: rgb(8 12 18 / 0.95);
   --color-panel-solid: #0a0f17;
   --color-line: rgb(148 170 196 / 0.14);
   --color-line-strong: rgb(148 170 196 / 0.26);
@@ -154,6 +154,48 @@ body {
   border: 1px solid var(--color-line-strong);
   color: var(--color-ink-soft);
   transform: translate(-50%, calc(-100% - 8px));
+}
+
+/* --- key-location labels */
+.site-anchor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+.site-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transform: translate(-5px, -50%);
+  padding: 1px 6px 1px 0;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: #e8edf3;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px #000, 0 0 6px #000;
+}
+.site-label__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e8edf3;
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 0.55);
+}
+.site-label--artemis .site-label__dot {
+  background: var(--color-gold);
+}
+.site-label__tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #0b0e14;
+  background: var(--color-gold);
+  border-radius: 3px;
+  padding: 0 3px;
+  text-shadow: none;
+}
+.site-label:hover {
+  color: #fff;
 }
 
 @keyframes spin {

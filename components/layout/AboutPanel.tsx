@@ -94,7 +94,7 @@ export default function AboutPanel() {
             <li>Shading/layers: block-mean to 640 m and 160 m textures; normals from the DEM with the projection scale factor applied.</li>
             <li>PSR: fraction of 20 m PSR pixels per texel (exact block average, no thresholding of brightness).</li>
             <li>Slope and PSR read-outs use the nearest grid node; elevation is bilinear.</li>
-            <li>Vertical exaggeration (default 2×) is applied only to rendering — never to displayed values.</li>
+            <li>Vertical exaggeration (default 2×) is applied only to rendering, never to displayed values or the horizon analysis.</li>
           </ul>
 
           {meta && (
@@ -120,6 +120,30 @@ export default function AboutPanel() {
             </>
           )}
 
+          <H>Sun &amp; Earth positions</H>
+          <p>
+            Hourly sub-solar and sub-Earth points (where the Sun / Earth is at the zenith) from now to 2035, precomputed offline
+            from NASA JPL&apos;s DE440 ephemeris with the DE421 lunar orientation (MOON_ME frame, the LOLA frame). Checked against
+            every hour of NASA SVS <span className="num">mooninfo_2026.json</span> and against JPL Horizons (max difference ≈ 0.006°).
+            The browser never calls Horizons.
+          </p>
+          <p className="num mt-1.5 text-[11.5px] text-ink">sin(el) = sin φ·sin φb + cos φ·cos φb·cos(λ − λb)</p>
+          <ul className="mt-1.5 list-disc space-y-1 pl-4">
+            <li>Earth parallax: el′ = atan2(sin el − R/d, cos el), using the Earth–Moon distance d (up to 0.26°).</li>
+            <li>Sun disc radius 0.27°: partly lit while el + 0.27° &gt; horizon; disc-weighted sunlit %.</li>
+            <li>Earth counts as visible when its centre is above the terrain horizon.</li>
+          </ul>
+
+          <H>Terrain horizon</H>
+          <ul className="list-disc space-y-1 pl-4">
+            <li>From each point, the highest terrain angle along great circles in 72 compass directions (5°), out to 250 km,
+              with exact lunar curvature. North = away from the pole.</li>
+            <li>Whole region: 475 × 475 cells (1.28 km), precomputed from the LOLA DEM (640 m sampling).</li>
+            <li>Inside your landing ellipse: every 80 m LOLA cell (thinned to ≤ 9,000 cells for very large ellipses), 80 m terrain
+              to 25 km and 640 m terrain to 250 km; 360 directions at the centre.</li>
+            <li>Horizons are computed at ground level (no lander mast height).</li>
+          </ul>
+
           <H>Global Moon (context only)</H>
           <p>
             The full-Moon globe uses the NASA SVS CGI Moon Kit — LROC WAC colour mosaic and LOLA global DEM (public domain). It is
@@ -130,7 +154,9 @@ export default function AboutPanel() {
           <ul className="list-disc space-y-1 pl-4">
             <li>PSRs are the mapped LPSR product, not dark pixels in the hillshade or the 3D shading.</li>
             <li>Slope is one factor among many (illumination, communications, roughness, hazards) — no landing suitability is implied.</li>
-            <li>The 3D lighting is illustrative; the baked hillshade uses the source product&apos;s 45°/45° sun.</li>
+            <li>3D lighting uses the real Sun direction for the selected time (no cast shadows); use the
+              &quot;Sunlight &amp; shadows&quot; layer for terrain-horizon shadowing. The baked hillshade uses the source
+              product&apos;s 45°/45° sun.</li>
             <li>Stars in the background are decorative.</li>
           </ul>
         </div>

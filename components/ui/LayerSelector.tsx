@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
 import { BASE_LAYERS, EXAGGERATION_RANGE, type BaseLayer } from "@/lib/lunar-config";
-import { ELEVATION_RAMP, SLOPE_MAX_DEG, SLOPE_RAMP, type RampStop } from "@/lib/shaders";
-import { store, useAppStore } from "@/lib/store";
+import { ANALYSIS_RAMP, EARTH_COLOR, ELEVATION_RAMP, SLOPE_MAX_DEG, SLOPE_RAMP, SUN_COLOR, type RampStop } from "@/lib/shaders";
+import { store, useAppStore, type AnalysisLayer } from "@/lib/store";
+import { planData } from "@/lib/planner-actions";
 import { useLunarRegistry } from "@/hooks/useLunarData";
 import { IconChevron, IconLayers } from "./icons";
 
@@ -85,12 +86,69 @@ function Slider(props: {
   );
 }
 
+const ANALYSIS_OPTIONS: { id: AnalysisLayer; label: string; group: "off" | "now" | "mission" | "annual" }[] = [
+  { id: "none", label: "Off", group: "off" },
+  { id: "now-sun", label: "Sunlight & shadows", group: "now" },
+  { id: "now-earth", label: "Earth in view", group: "now" },
+  { id: "mission-sun", label: "Sunlit %", group: "mission" },
+  { id: "mission-earth", label: "Earth visible %", group: "mission" },
+  { id: "mission-night", label: "Longest night", group: "mission" },
+  { id: "annual-sun", label: "Sunlit %", group: "annual" },
+  { id: "annual-earth", label: "Earth visible %", group: "annual" },
+  { id: "annual-night", label: "Longest night", group: "annual" },
+];
+
+function AnalysisLegend({ layer }: { layer: AnalysisLayer }) {
+  const missionDays = useAppStore((s) => s.missionDays);
+  if (layer === "none") return null;
+  const note = "Terrain horizon from LOLA (1.28 km cells; 80 m inside your ellipse after analysis).";
+  if (layer === "now-sun")
+    return (
+      <div className="mt-2 space-y-1">
+        <div className="flex items-center gap-3 text-[11px] text-ink-soft">
+          <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: SUN_COLOR }} /> Sun visible</span>
+          <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#05070d] ring-1 ring-white/20" /> In shadow</span>
+        </div>
+        <p className="text-[11px] leading-snug text-ink-mute">Sun disc above the local terrain horizon at the selected time. {note}</p>
+      </div>
+    );
+  if (layer === "now-earth")
+    return (
+      <div className="mt-2 space-y-1">
+        <div className="flex items-center gap-3 text-[11px] text-ink-soft">
+          <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: EARTH_COLOR }} /> Earth visible</span>
+          <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#2a2d33]" /> Earth hidden</span>
+        </div>
+        <p className="text-[11px] leading-snug text-ink-mute">Direct-to-Earth line of sight (Earth&apos;s centre above the horizon, parallax-corrected). {note}</p>
+      </div>
+    );
+  const night = layer.endsWith("night");
+  const annual = layer.startsWith("annual");
+  const stops = night ? [...ANALYSIS_RAMP].reverse().map((s, i, a) => ({ ...s, t: a.length - 1 === 0 ? 0 : i / (a.length - 1) })) : ANALYSIS_RAMP;
+  const lo = night ? "0 h" : "0 %";
+  const hi = night ? (annual ? "1020 h+" : `${missionDays * 24} h`) : "100 %";
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="h-2 rounded-sm" style={{ background: gradient(stops) }} />
+      <div className="num flex justify-between text-[10px] text-ink-mute">
+        <span>{lo}</span>
+        <span>{hi}</span>
+      </div>
+      <p className="text-[11px] leading-snug text-ink-mute">
+        {night ? "Longest continuous period with the Sun fully hidden. " : layer.endsWith("sun") ? "Share of hours with the Sun visible (disc-weighted). " : "Share of hours with Earth in direct view. "}
+        {annual ? "Whole year 2027, hourly." : `Over your ${missionDays}-day mission window${planData.stepHours > 1 ? `, every ${planData.stepHours} h` : ", hourly"}.`}
+      </p>
+    </div>
+  );
+}
+
 export default function LayerSelector() {
   const layer = useAppStore((s) => s.baseLayer);
   const psr = useAppStore((s) => s.psrOverlay);
   const exag = useAppStore((s) => s.exaggeration);
-  const az = useAppStore((s) => s.sunAzimuthDeg);
-  const el = useAppStore((s) => s.sunElevationDeg);
+  const analysisLayer = useAppStore((s) => s.analysisLayer);
+  const missionReady = useAppStore((s) => s.missionLayersReady);
+  const missionDays = useAppStore((s) => s.missionDays);
   const meta = useLunarRegistry().meta;
   const [open, setOpen] = useState(true);
   // Keep the Moon unobstructed on narrow screens: start collapsed.
@@ -102,7 +160,7 @@ export default function LayerSelector() {
   return (
     <section
       aria-label="Visualisation layers"
-      className="panel absolute left-3 top-[68px] z-20 w-[264px] max-w-[calc(100vw-24px)] md:left-4"
+      className="panel w-full"
     >
       <button
         type="button"
@@ -171,6 +229,34 @@ export default function LayerSelector() {
             </p>
           </div>
 
+          <div>
+            <div className="eyebrow mb-2">Sun &amp; Earth analysis</div>
+            <div role="radiogroup" aria-label="Sun and Earth analysis layer" className="space-y-0.5">
+              {ANALYSIS_OPTIONS.map((o) => {
+                const disabled = o.group === "mission" && !missionReady;
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={analysisLayer === o.id}
+                    disabled={disabled}
+                    onClick={() => store.set({ analysisLayer: o.id })}
+                    className={`flex w-full items-center justify-between rounded px-2 py-1 text-left text-[12px] transition-colors disabled:opacity-35 ${
+                      analysisLayer === o.id ? "bg-white/10 text-ink" : "text-ink-soft hover:bg-white/5 hover:text-ink"
+                    }`}
+                  >
+                    <span>{o.label}</span>
+                    <span className="text-[10px] text-ink-mute">
+                      {o.group === "mission" ? (missionReady ? `${missionDays} d mission` : "after analysis") : o.group === "annual" ? "2027" : o.group === "now" ? "selected time" : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <AnalysisLegend layer={analysisLayer} />
+          </div>
+
           <div className="space-y-2.5">
             <div className="eyebrow">Rendering</div>
             <Slider
@@ -182,11 +268,9 @@ export default function LayerSelector() {
               format={(v) => (v === 1 ? "1.00× true scale" : `${v.toFixed(2)}× visual`)}
               onChange={(v) => store.set({ exaggeration: v })}
             />
-            <Slider label="Sun azimuth" value={az} min={0} max={360} step={1} format={(v) => `${v.toFixed(0)}°`} onChange={(v) => store.set({ sunAzimuthDeg: v })} />
-            <Slider label="Sun elevation at pole" value={el} min={1} max={45} step={0.5} format={(v) => `${v.toFixed(1)}°`} onChange={(v) => store.set({ sunElevationDeg: v })} />
             <p className="text-[11px] leading-snug text-ink-mute">
-              Illustrative lighting for the 3D shading. At the real South Pole the Sun never rises more than ~1.5°.
-              Exaggeration is visual only; read-outs show true LOLA values.
+              Exaggeration is visual only; read-outs show true LOLA values. 3D lighting uses the real Sun position for
+              the selected time.
             </p>
           </div>
         </div>

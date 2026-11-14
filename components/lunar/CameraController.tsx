@@ -24,6 +24,8 @@ import { store, type ViewMode } from "@/lib/store";
 import { sharedUniforms } from "@/lib/shaders";
 import { frameState } from "@/lib/frame-state";
 import { readout, requestHighResTerrain, sampleHeightM } from "@/hooks/useLunarData";
+import { RAD as SKY_RAD, latLonToMap } from "@/lib/sky";
+import { DEFAULT_ELLIPSE, setEllipse } from "@/lib/planner-actions";
 
 interface RigState {
   lnD: number;
@@ -129,8 +131,17 @@ export default function CameraController() {
     /* ---------------------------------------------------------- input */
     const el = gl.domElement;
     const pointers = new Map<number, { x: number; y: number }>();
-    let mode: "rotate" | "pan" | null = null;
+    let mode: "rotate" | "pan" | "draw" | null = null;
     let pinchDist = 0;
+    let drawCentre: { lat: number; lon: number; x: number; y: number; sx: number; sy: number } | null = null;
+
+    /** Surface point under a client position (lat/lon), or null. */
+    const pick = (clientX: number, clientY: number) => {
+      const rect = el.getBoundingClientRect();
+      const r = pickSurface(camera, clientX - rect.left, clientY - rect.top, { width: rect.width, height: rect.height },
+        sharedUniforms.uExag.value);
+      return r ? { lat: r.lat, lon: r.lon } : null;
+    };
 
     const onDown = (e: PointerEvent) => {
       el.setPointerCapture(e.pointerId);
@@ -140,10 +151,21 @@ export default function CameraController() {
         const [a, b] = [...pointers.values()];
         pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
         mode = null;
+      } else if (store.get().drawing && e.button === 0 && !e.shiftKey) {
+        // Landing-ellipse drawing: press = centre, drag = semi-major axis length and heading.
+        const p = pick(e.clientX, e.clientY);
+        if (p && p.lat <= -80) {
+          const m = latLonToMap(p.lat, p.lon);
+          drawCentre = { ...p, ...m, sx: e.clientX, sy: e.clientY };
+          const prevE = store.get().ellipse;
+          const ratio = prevE ? prevE.bKm / Math.max(prevE.aKm, 0.01) : DEFAULT_ELLIPSE.bKm / DEFAULT_ELLIPSE.aKm;
+          setEllipse({ lat: p.lat, lon: p.lon, aKm: DEFAULT_ELLIPSE.aKm, bKm: DEFAULT_ELLIPSE.aKm * ratio, headingDeg: prevE?.headingDeg ?? 0 });
+          mode = "draw";
+        } else mode = "rotate";
       } else {
         mode = e.button === 2 || e.shiftKey || e.ctrlKey ? "pan" : "rotate";
       }
-      el.style.cursor = "grabbing";
+      el.style.cursor = mode === "draw" ? "crosshair" : "grabbing";
     };
     const onMove = (e: PointerEvent) => {
       const rect = el.getBoundingClientRect();
@@ -163,6 +185,24 @@ export default function CameraController() {
       }
       // Angular speed scales gently with zoom so close-range control stays precise.
       const speed = 0.16 + 0.12 * (1 - poleFocusOf(cur.current.lnD));
+      if (mode === "draw" && drawCentre) {
+        if (Math.hypot(e.clientX - drawCentre.sx, e.clientY - drawCentre.sy) < 6) return; // a click keeps the default size
+        const p = pick(e.clientX, e.clientY);
+        if (!p) return;
+        const m = latLonToMap(p.lat, p.lon);
+        const vx = m.x - drawCentre.x, vy = m.y - drawCentre.y;
+        const lon = Math.hypot(drawCentre.x, drawCentre.y) < 1e-9 ? 0 : Math.atan2(drawCentre.x, drawCentre.y);
+        // compass heading: north = away from the pole, east = direction of increasing longitude
+        const n = vx * Math.sin(lon) + vy * Math.cos(lon), ea = vx * Math.cos(lon) - vy * Math.sin(lon);
+        const a = Math.min(40, Math.max(0.3, Math.hypot(vx, vy)));
+        const prevE = store.get().ellipse;
+        const ratio = prevE ? prevE.bKm / Math.max(prevE.aKm, 0.01) : 0.5;
+        setEllipse({
+          lat: drawCentre.lat, lon: drawCentre.lon, aKm: a, bKm: Math.max(0.15, a * ratio),
+          headingDeg: (((Math.atan2(ea, n) / SKY_RAD) % 180) + 180) % 180,
+        });
+        return;
+      }
       if (mode === "rotate") {
         g.az += dx * speed;
         g.tilt += dy * speed * 0.8;
@@ -180,8 +220,12 @@ export default function CameraController() {
     const onUp = (e: PointerEvent) => {
       pointers.delete(e.pointerId);
       if (pointers.size === 0) {
+        if (mode === "draw") {
+          drawCentre = null;
+          store.set({ drawing: false });
+        }
         mode = null;
-        el.style.cursor = "grab";
+        el.style.cursor = store.get().drawing ? "crosshair" : "grab";
       }
     };
     const onWheel = (e: WheelEvent) => {

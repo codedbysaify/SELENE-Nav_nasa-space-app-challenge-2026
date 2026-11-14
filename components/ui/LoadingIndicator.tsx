@@ -12,7 +12,7 @@ export default function LoadingIndicator() {
     <div
       role="status"
       aria-live="polite"
-      className={`panel enter absolute z-20 flex max-w-[min(420px,calc(100vw-24px))] items-center gap-2.5 px-3 py-2 text-[12px] max-md:right-3 max-md:top-[64px] max-md:max-w-[calc(100vw-120px)] md:bottom-4 md:left-4 ${
+      className={`panel enter absolute z-20 flex max-w-[min(420px,calc(100vw-24px))] items-center gap-2.5 px-3 py-2 text-[12px] max-md:right-3 max-md:top-[64px] max-md:max-w-[calc(100vw-120px)] md:bottom-[34px] md:left-4 ${
         error ? "border-[#d9573e]/50" : ""
       }`}
     >

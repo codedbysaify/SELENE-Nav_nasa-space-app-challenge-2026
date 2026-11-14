@@ -26,6 +26,18 @@ export const ELEVATION_RAMP: RampStop[] = [
   { t: 1.0, color: "#f4ece2" },
 ];
 
+/** Analysis ramp for Sun/Earth statistics (0 = poor → 1 = good). */
+export const ANALYSIS_RAMP: RampStop[] = [
+  { t: 0.0, color: "#0d0a24" },
+  { t: 0.25, color: "#3a2b7c" },
+  { t: 0.5, color: "#8d3f8e" },
+  { t: 0.75, color: "#e27a4e" },
+  { t: 1.0, color: "#f8e38c" },
+];
+export const EARTH_COLOR = "#4fa8ff";
+export const SUN_COLOR = "#ffd27a";
+export const ELLIPSE_COLOR = "#ffcf5c";
+
 /** Slope ramp; t = slope / 45° (clamped). */
 export const SLOPE_MAX_DEG = 45;
 export const SLOPE_RAMP: RampStop[] = [
@@ -149,7 +161,9 @@ export const GLOBE_FRAGMENT = /* glsl */ `
     vec2 uv = seamSafe(globeUv(d));
     vec3 albedo = uHasTex > 0.5 ? texture2D(uColor, uv).rgb : vec3(0.18);
     vec3 n = texture2D(uNormal, uv).rgb * 2.0 - 1.0;
-    n = uHasTex > 0.5 ? normalize(vec3(n.xy * uExag, max(n.z, 1e-3))) : vec3(0.0, 0.0, 1.0);
+    // The global normal map is coarse (3.8 km); keep its relief gentle so grazing polar sunlight
+    // does not turn it into streaks. True relief near the pole comes from the LOLA terrain mesh.
+    n = uHasTex > 0.5 ? normalize(vec3(n.xy * min(uExag, 1.5) * 0.7, max(n.z, 1e-3))) : vec3(0.0, 0.0, 1.0);
     vec3 E = cross(vec3(0.0, 1.0, 0.0), d);
     E = length(E) < 1e-5 ? vec3(1.0, 0.0, 0.0) : normalize(E);
     vec3 Nn = cross(d, E);
@@ -158,7 +172,7 @@ export const GLOBE_FRAGMENT = /* glsl */ `
     vec3 L = normalize(uSunDir);
     vec3 V = normalize(cameraPosition - vWorldPos);
     float lit = lunarReflectance(N, L, V);
-    vec3 color = albedo * (lit * 1.55 + 0.012);
+    vec3 color = albedo * (lit * 1.55 + 0.03);
 
     // South Pole highlight: 80°S ring + faint cap tint, fading as the camera approaches.
     float distKm = (latDeg + 80.0) * KM_PER_DEG;
@@ -198,6 +212,16 @@ export const TERRAIN_FRAGMENT = /* glsl */ `
   ${FRAGMENT_GLSL}
   ${rampGlsl("elevationRamp", ELEVATION_RAMP)}
   ${rampGlsl("slopeRamp", SLOPE_RAMP)}
+  ${rampGlsl("analysisRamp", ANALYSIS_RAMP)}
+  uniform sampler2D uPlanTex;   // overview (1.28 km): r = Sun fraction / sunlit %, g = Earth, b = longest night
+  uniform float uPlanMode;      // 0 off · 1 sun now · 2 Earth now · 3 sunlit % · 4 Earth % · 5 longest night
+  uniform float uPlanOpacity;
+  uniform sampler2D uFineTex;   // 80 m ellipse analysis (same channels as uPlanTex for modes 1–2)
+  uniform vec4 uFineBox;        // x0, y1 (top), width km, height km
+  uniform float uFineOn;
+  uniform vec4 uEllipse;        // centre x, y (km) and major-axis unit vector
+  uniform vec2 uEllipseAB;      // semi-axes km
+  uniform float uEllipseOn;
   uniform sampler2D uVisual;   // r: NASA hillshade, g/b: normal x/y (map frame)
   uniform sampler2D uScience;  // r: elevation, g: slope, b: PSR fraction
   uniform sampler2D uGlobeColor;
@@ -244,9 +268,11 @@ export const TERRAIN_FRAGMENT = /* glsl */ `
     vec3 V = normalize(cameraPosition - vWorldPos);
     float lit = lunarReflectance(N, L, V);
     float dayside = smoothstep(-0.06, 0.18, dot(U, L));
+    // Near the pole the Sun is always within ~1.6° of the horizon: use a narrow day/night transition there.
+    float polarDay = smoothstep(-0.05, 0.05, dot(U, L));
 
     // --- base layers
-    vec3 hill = srgbToLinear(vec3(vis.r)) * mix(0.10, 1.0, dayside);
+    vec3 hill = srgbToLinear(vec3(vis.r)) * mix(0.16, 1.0, polarDay);
     vec3 elev = elevationRamp(sci.r) * (0.30 + 0.95 * lit);
     vec3 slope = slopeRamp(sci.g * 90.0 / ${SLOPE_MAX_DEG.toFixed(1)}) * (0.40 + 0.80 * lit);
     vec3 color = hill * uLayerW.x + elev * uLayerW.y + slope * uLayerW.z;
@@ -262,6 +288,44 @@ export const TERRAIN_FRAGMENT = /* glsl */ `
       vec2 guv = seamSafe(globeUv(U));
       vec3 gcol = texture2D(uGlobeColor, guv).rgb * (lit * 1.55 + 0.012);
       color = mix(color, gcol, edge);
+    }
+
+    // --- Sun / Earth analysis overlays (terrain horizon, real ephemeris)
+    if (uPlanMode > 0.5) {
+      vec4 pv = texture2D(uPlanTex, vec2(vUv.x, 1.0 - vUv.y));
+      if (uFineOn > 0.5) {
+        vec2 fuv = vec2((vMap.x - uFineBox.x) / uFineBox.z, (uFineBox.y - vMap.y) / uFineBox.w);
+        if (all(greaterThanEqual(fuv, vec2(0.0))) && all(lessThanEqual(fuv, vec2(1.0)))) {
+          vec4 fv = texture2D(uFineTex, fuv);
+          if (fv.a > 0.5) pv.rg = fv.rg;   // 80 m result inside the ellipse
+        }
+      }
+      float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+      vec3 base = vec3(luma);
+      vec3 ov = color;
+      if (uPlanMode < 1.5) {                 // Sun now: shadowed terrain goes dark, lit terrain warm
+        ov = mix(base * 0.10 + vec3(0.002, 0.004, 0.012), base * 1.05 + ${hexToLinearVec3(SUN_COLOR)} * 0.05, pv.r);
+      } else if (uPlanMode < 2.5) {          // Earth now: blue where Earth is above the terrain horizon
+        ov = mix(base * 0.35, base * 0.55 + ${hexToLinearVec3(EARTH_COLOR)} * 0.45, pv.g);
+      } else if (uPlanMode < 3.5) {
+        ov = analysisRamp(pv.r) * (0.55 + 0.6 * luma);
+      } else if (uPlanMode < 4.5) {
+        ov = analysisRamp(pv.g) * (0.55 + 0.6 * luma);
+      } else {
+        ov = analysisRamp(1.0 - pv.b) * (0.55 + 0.6 * luma);
+      }
+      color = mix(color, ov, uPlanOpacity * step(rho, CAP_R + 0.5));
+    }
+
+    // --- landing ellipse
+    if (uEllipseOn > 0.5) {
+      vec2 dv = vMap - uEllipse.xy;
+      vec2 pq = vec2(dot(dv, uEllipse.zw), dot(dv, vec2(-uEllipse.w, uEllipse.z))) / uEllipseAB;
+      float k = length(pq);
+      float fw = max(fwidth(k), 1e-5);
+      float ring = 1.0 - smoothstep(1.2 * fw, 2.6 * fw, abs(k - 1.0));
+      color = mix(color, ${hexToLinearVec3(ELLIPSE_COLOR)}, ring * 0.95);
+      color += ${hexToLinearVec3(ELLIPSE_COLOR)} * 0.035 * step(k, 1.0);
     }
 
     // --- South Pole highlight (global view)
@@ -286,10 +350,19 @@ export const sharedUniforms = {
   uEdgeBlend: { value: 1 },
   uGlobeMix: { value: 1 },
   uCapCover: { value: 0 },
+  uPlanTex: { value: null as THREE.Texture | null },
+  uPlanMode: { value: 0 },
+  uPlanOpacity: { value: 0 },
+  uFineTex: { value: null as THREE.Texture | null },
+  uFineBox: { value: new THREE.Vector4(0, 0, 1, 1) },
+  uFineOn: { value: 0 },
+  uEllipse: { value: new THREE.Vector4(0, 0, 0, 1) },
+  uEllipseAB: { value: new THREE.Vector2(1, 1) },
+  uEllipseOn: { value: 0 },
 };
 
-export function sunDirection(azimuthDeg: number, elevationDeg: number, out = new THREE.Vector3()) {
-  // Elevation is measured above the local horizon *at the south pole* (up = −y).
-  const a = (azimuthDeg * Math.PI) / 180, e = (elevationDeg * Math.PI) / 180;
-  return out.set(Math.cos(e) * Math.cos(a), -Math.sin(e), Math.cos(e) * Math.sin(a)).normalize();
+/** Scene-frame unit vector towards the Sun from its sub-solar point (scene = MOON_ME(Y, Z, X)). */
+export function sunDirectionFromSubpoint(latDeg: number, lonDeg: number, out = new THREE.Vector3()) {
+  const la = (latDeg * Math.PI) / 180, lo = (lonDeg * Math.PI) / 180;
+  return out.set(Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo));
 }

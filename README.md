@@ -1,4 +1,4 @@
-# SELENE-Nav — Interactive Lunar South Pole Exploration System
+# SELENE-Nav — Lunar South Pole Landing-Site Planner
 
 SELENE-Nav is a 3D visualization of the lunar South Pole built on NASA's Lunar
 Orbiter Laser Altimeter (LOLA) data. It opens on the full Moon, marks both
@@ -10,6 +10,19 @@ permanently-shadowed-region (PSR) layers.
 > Paper DOI: <https://doi.org/10.3847/PSJ/acf3e1> ·
 > NASA data DOI: <https://doi.org/10.60903/gsfcpgda-lola-spole> ·
 > Source: <https://pgda.gsfc.nasa.gov/products/90>
+
+**Mission planning workflow (v2).** Pick a landing date (any time from now to
+2035), draw a landing ellipse on the South Pole (or pick a key location), and
+SELENE-Nav reports:
+* **Power:** Sun elevation versus the real terrain horizon, time until sunset or
+  sunrise, sunlit %, and the longest night.
+* **Communication:** Earth elevation versus the horizon, time until Earthset or
+  Earthrise, and Earth-visible %.
+* **Terrain:** slope and PSR fraction inside the ellipse.
+
+A time slider animates live shadow and Earth-visibility maps on the 3D terrain.
+All Sun/Earth data is precomputed offline from NASA/JPL ephemerides; the browser
+never calls JPL Horizons.
 
 ---
 
@@ -50,6 +63,59 @@ python scripts/download_lunar_data.py       # ≈ 650 MB → data/raw/
 ```bash
 python scripts/process_lunar_data.py        # ≈ 2 min → public/data/lunar/
 ```
+
+Then the Sun/Earth pipeline (needs `pip install skyfield scipy`):
+
+```bash
+python scripts/compute_ephemeris.py         # hourly Sun/Earth sub-points to 2035 (≈ 1.6 MB), validated
+```
+
+```bash
+python scripts/compute_horizons.py          # terrain horizons, 80 m DEM tiles, 2027 reference maps (≈ 25 min)
+```
+
+### `scripts/compute_ephemeris.py`
+
+For every hour from Nov 2026 to Dec 2035 it writes the **sub-solar** and
+**sub-Earth** points (latitude, longitude) and the Earth–Moon distance to
+`ephemeris-hourly.f32` (float32, 80,352 rows, 1.6 MB).
+
+* **Positions:** NASA JPL DE440 (`de440s.bsp`).
+* **Lunar orientation:** DE421 principal axes plus `moon_080317.tf`, in the
+  MOON_ME frame that the LOLA products use.
+* **Library:** Skyfield.
+* **Kernels:** downloaded once from NAIF into `data/kernels/` (git-ignored).
+
+Validation results are stored in `ephemeris-meta.json`:
+
+| Check | Result |
+| --- | --- |
+| NASA SVS `mooninfo_2026.json`, all 8,760 hours | max 0.0063° (sub-solar lon), 0.0005° (sub-Earth) |
+| JPL Horizons, 7 dates 2027–2033 | max 0.006° |
+| Elevation formula at the sub-points | exactly 90° |
+| Pole identity: Earth elevation at 90°S = −(sub-Earth latitude) | error < 1e-6° |
+
+The Sun at 90°S stays within −1.58°…+1.59° of the smooth horizon, and Earth
+within ±6.86°.
+
+### `scripts/compute_horizons.py`
+
+* **Terrain horizon:** from each cell of a 475 × 475 grid (1.28 km), it walks
+  outward along great circles in 72 compass directions, at steps growing ×1.05
+  from 0.9 km to 250 km. It samples the LOLA DEM (640 m), falling back to the SVS
+  global DEM beyond the 80°S grid. It keeps the maximum elevation angle
+  `atan2(r₁cos δ − r₀, r₁ sin δ)`, which includes exact curvature.
+  * North means away from the pole (at the pole itself, the 0° meridian).
+  * A flat-sphere self-test gives −0.015°, as expected.
+  * Output: `horizon-475.u8z`, zlib, 1 byte per direction (0.15° steps, −8…+30°).
+* **80 m DEM tiles** (`dem80/t_r_c.i16z`, 380 px ≈ 30 km each, zlib). The
+  browser computes 80 m horizons inside the landing ellipse from these.
+* **Annual reference layers** (`annual-2027.webp`): sunlit fraction,
+  Earth-visible fraction and longest night for every hour of 2027, computed with
+  the same rules as the browser:
+  * Sun disc radius 0.27°, disc-weighted.
+  * Earth parallax `atan2(sin el − R/d, cos el)`.
+  * Earth counts as visible when its centre is above the horizon.
 
 ### `scripts/download_lunar_data.py`
 
@@ -234,5 +300,14 @@ telemetry panels.
   Shadows are not ray-traced, so dynamic shading is not a substitute for the
   illumination products.
 * The globe outside 80°S uses the coarser SVS global mosaic and DEM (≈ 2.7 km and 7.6 km per pixel).
+* Region-wide Sun/Earth maps use 1.28 km horizon cells. The exact 80 m analysis
+  runs inside the drawn ellipse, which is thinned to ≤ 9,000 cells when very
+  large.
+* Horizons are at ground level (no mast height). The Sun is modelled as a
+  uniform disc. Earth counts as visible when its centre is above the horizon; no
+  antenna or link-budget model.
+* The Artemis III regions are anchored at their namesake IAU features, because
+  NASA publishes them only as a map. IM-2 and Chang'e-7 are noted as regions,
+  not points.
 * The high-res LOD (≈ 1.8 M triangles, two 3800² textures) is aimed at desktop
   GPUs. Use `?quality=low` on weak hardware.

@@ -18,7 +18,7 @@ export default function TopBar() {
           <span className="text-[17px] font-semibold tracking-[0.02em] text-ink">
             SELENE<span className="text-accent">-</span>Nav
           </span>
-          <span className="mt-1 text-[9.5px] font-medium tracking-[0.24em] text-ink-mute">LUNAR SOUTH POLE EXPLORATION</span>
+          <span className="mt-1 text-[9.5px] font-medium tracking-[0.24em] text-ink-mute">LUNAR SOUTH POLE · LANDING PLANNER</span>
         </div>
       </div>
 

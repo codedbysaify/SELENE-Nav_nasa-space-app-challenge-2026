@@ -1,12 +1,50 @@
+# ---------- Node / Next.js ----------
 node_modules/
 .next/
 out/
+build/
 next-env.d.ts
 *.tsbuildinfo
+
+# ---------- Vercel ----------
+.vercel/
+
+# ---------- Environment files ----------
+.env
 .env*.local
-# Original NASA GeoTIFFs (~650 MB) — fetch with scripts/download_lunar_data.py
+
+# ---------- Logs ----------
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- NASA source data ----------
+# Original GeoTIFFs (~650 MB). Re-create with: python scripts/download_lunar_data.py
 data/raw/*
 !data/raw/.gitkeep
 *.part
+*.invalid*
+# NOTE: public/data/lunar/ (processed assets, ~37 MB) IS committed on purpose —
+# the deployed app needs it and Vercel does not run the Python pipeline.
+
+# ---------- Python ----------
 __pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# ---------- Archives ----------
+*.zip
+
+# ---------- OS / editors ----------
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# NASA/JPL SPICE kernels (~35 MB) — re-downloaded by scripts/compute_ephemeris.py
+data/kernels/

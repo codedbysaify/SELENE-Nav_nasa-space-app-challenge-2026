@@ -13,6 +13,8 @@ import PoleMarkers from "./PoleMarkers";
 import CameraController from "./CameraController";
 import TerrainLayers from "./TerrainLayers";
 import Starfield from "./Starfield";
+import PlanOverlay from "./PlanOverlay";
+import { SiteMarkers } from "./SiteMarkers";
 
 function DataLoader() {
   useLunarDataLoader();
@@ -39,6 +41,8 @@ export default function MoonScene() {
       <SouthPoleTerrain />
       <PoleMarkers />
       <TerrainLayers />
+      <PlanOverlay />
+      <SiteMarkers />
       <CameraController />
     </Canvas>
   );

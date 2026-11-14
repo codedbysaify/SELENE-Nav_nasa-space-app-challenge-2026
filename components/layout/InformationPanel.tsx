@@ -77,7 +77,7 @@ export default function InformationPanel() {
   return (
     <aside
       aria-label="Exploration telemetry"
-      className="panel absolute right-3 top-[68px] z-20 w-[272px] max-w-[calc(100vw-24px)] md:right-4 max-md:top-auto max-md:bottom-[72px]"
+      className="panel w-full"
     >
       <button
         type="button"

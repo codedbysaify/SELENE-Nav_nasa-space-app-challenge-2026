@@ -24,7 +24,7 @@ export default function ExplorationControls() {
   return (
     <nav
       aria-label="Camera controls"
-      className="panel absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap p-1 shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
+      className="panel absolute bottom-[34px] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 whitespace-nowrap p-1 shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
     >
       <button
         type="button"
