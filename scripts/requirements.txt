@@ -1,0 +1,6 @@
+# Downloader: standard library only (rasterio optional for deeper validation)
+# Processor:
+rasterio>=1.3
+numpy>=1.24
+pillow>=10.0
+pyproj>=3.5   # optional: cross-checks the stereographic formulas against PROJ

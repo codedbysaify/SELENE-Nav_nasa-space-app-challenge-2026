@@ -1,0 +1,341 @@
+{
+  "generator": "scripts/process_lunar_data.py",
+  "generated_utc": "2026-11-14T09:09:44+00:00",
+  "body": {
+    "name": "Moon",
+    "reference_radius_m": 1737400.0,
+    "frame": "MOON_ME (JPL DE421)"
+  },
+  "projection": {
+    "type": "polar stereographic (south)",
+    "proj4": "+proj=stere +lat_0=-90 +lat_ts=-90 +lon_0=0 +x_0=0 +y_0=0 +R=1737400 +units=m +no_defs=True",
+    "wkt": "PROJCS[\"Moon (2015) - Sphere / Ocentric / South Polar\",GEOGCS[\"Moon (2015) - Sphere / Ocentric\",DATUM[\"Moon (2015) - Sphere\",SPHEROID[\"Moon (2015) - Sphere\",1737400,0,AUTHORITY[\"IAU\",\"30100\"]],AUTHORITY[\"IAU\",\"30100\"]],PRIMEM[\"Reference Meridian\",0,AUTHORITY[\"IAU\",\"30100\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"IAU\",\"30100\"]],PROJECTION[\"Polar_Stereographic\"],PARAMETER[\"latitude_of_origin\",-90],PARAMETER[\"central_meridian\",0],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",NORTH],AXIS[\"Northing\",NORTH],AUTHORITY[\"IAU\",\"30135\"]]",
+    "inverse": {
+      "lat_deg": "-(90 - 2*atan(hypot(x,y) / (2R)))",
+      "lon_deg": "atan2(x, y)"
+    },
+    "scale_factor": "k = 2 / (1 + sin|lat|)",
+    "proj_cross_check": {
+      "checked": true,
+      "max_dlat_deg": 3.268496584496461e-13,
+      "max_dlon_deg": 2.842170943040401e-14,
+      "n_points": 2000
+    }
+  },
+  "extent_m": {
+    "xmin": -304000.0,
+    "xmax": 304000.0,
+    "ymin": -304000.0,
+    "ymax": 304000.0
+  },
+  "cap_radius_m_80S": 304005.6080198807,
+  "elevation": {
+    "min_m": -7295.51708984375,
+    "max_m": 7026.3310546875,
+    "units": "m relative to 1737.4 km sphere",
+    "nan_filled_px": 0
+  },
+  "slope": {
+    "units": "degrees",
+    "nan_filled_px": 0
+  },
+  "psr": {
+    "definition": "LPSR_80S_20MPP_ADJ: 1 = permanently shadowed (Barker et al. 2023), 0 = not",
+    "nan_px_treated_as_0": 0,
+    "stats": {
+      "psr_area_km2": 20709.781558381634,
+      "cap_area_km2": 288138.6823497798,
+      "psr_fraction_of_cap": 0.07187435366016366,
+      "psr_pixels_20m": 52072360
+    }
+  },
+  "lods": {
+    "low": {
+      "grid": {
+        "file": "south-pole-height-low.i16",
+        "size": 380,
+        "cell_m": 1600.0,
+        "dtype": "int16 little-endian",
+        "units": "m relative to 1737.4 km sphere",
+        "node_location": "block centres",
+        "row0": "+y (top)",
+        "resampling": "block mean of 20\u00d720 source pixels (80 m)",
+        "min_m": -7130.03515625,
+        "max_m": 6931.15185546875
+      },
+      "query": {
+        "file": "south-pole-query-low.u8",
+        "size": 380,
+        "layout": "interleaved [slope, psr]",
+        "slope_decode": "deg = byte / 2.833333",
+        "psr_decode": "fraction = byte / 255"
+      },
+      "visual": {
+        "file": "south-pole-visual-low.webp",
+        "size": 950,
+        "cell_m": 640.0,
+        "channels": {
+          "r": "NASA hillshade (LDEM_80S_80MPP_ADJ_HILL), block mean",
+          "g": "normal x (map easting), v = byte/127.5 \u2212 1",
+          "b": "normal y (map northing), v = byte/127.5 \u2212 1"
+        },
+        "normal_source": "central differences of block-mean DEM (640 m), corrected for stereographic scale factor"
+      },
+      "science": {
+        "file": "south-pole-science-low.webp",
+        "size": 950,
+        "cell_m": 640.0,
+        "channels": {
+          "r": "elevation: m = -7295.517 + byte/255 \u00d7 14321.848",
+          "g": "slope (LDSM block mean): deg = byte / 2.833333",
+          "b": "PSR fraction of 20 m pixels in texel (32\u00d732 block): byte/255"
+        }
+      }
+    },
+    "high": {
+      "grid": {
+        "file": "south-pole-height-high.i16",
+        "size": 950,
+        "cell_m": 640.0,
+        "dtype": "int16 little-endian",
+        "units": "m relative to 1737.4 km sphere",
+        "node_location": "block centres",
+        "row0": "+y (top)",
+        "resampling": "block mean of 8\u00d78 source pixels (80 m)",
+        "min_m": -7242.48486328125,
+        "max_m": 7006.60693359375
+      },
+      "query": {
+        "file": "south-pole-query-high.u8",
+        "size": 950,
+        "layout": "interleaved [slope, psr]",
+        "slope_decode": "deg = byte / 2.833333",
+        "psr_decode": "fraction = byte / 255"
+      },
+      "visual": {
+        "file": "south-pole-visual-high.webp",
+        "size": 3800,
+        "cell_m": 160.0,
+        "channels": {
+          "r": "NASA hillshade (LDEM_80S_80MPP_ADJ_HILL), block mean",
+          "g": "normal x (map easting), v = byte/127.5 \u2212 1",
+          "b": "normal y (map northing), v = byte/127.5 \u2212 1"
+        },
+        "normal_source": "central differences of block-mean DEM (160 m), corrected for stereographic scale factor"
+      },
+      "science": {
+        "file": "south-pole-science-high.webp",
+        "size": 3800,
+        "cell_m": 160.0,
+        "channels": {
+          "r": "elevation: m = -7295.517 + byte/255 \u00d7 14321.848",
+          "g": "slope (LDSM block mean): deg = byte / 2.833333",
+          "b": "PSR fraction of 20 m pixels in texel (8\u00d78 block): byte/255"
+        }
+      }
+    }
+  },
+  "sources": {
+    "dem": {
+      "file": "LDEM_80S_80MPP_ADJ.TIF",
+      "width": 7600,
+      "height": 7600,
+      "dtype": "float32",
+      "nodata": null,
+      "nodata_is_nan": true,
+      "pixel_size_m": [
+        80.0,
+        80.0
+      ],
+      "bounds_m": [
+        -304000.0,
+        -304000.0,
+        304000.0,
+        304000.0
+      ],
+      "transform": [
+        80.0,
+        0.0,
+        -304000.0,
+        0.0,
+        -80.0,
+        304000.0
+      ],
+      "crs_proj4": "+proj=stere +lat_0=-90 +lat_ts=-90 +lon_0=0 +x_0=0 +y_0=0 +R=1737400 +units=m +no_defs=True",
+      "crs_wkt": null,
+      "overviews": [
+        2,
+        4,
+        8,
+        16
+      ],
+      "band_tags": {
+        "actual_range": "{-7295.51708984375,7026.3310546875}",
+        "long_name": "z",
+        "NETCDF_VARNAME": "z",
+        "_FillValue": "nan"
+      },
+      "sha256": "82030dcbdd7c4bb0c7d858e9b4b293b9f2cda5a543ba31ec0f42784bd6beee5a",
+      "url": "https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/LDEM_80S_80MPP_ADJ.TIF"
+    },
+    "hill": {
+      "file": "LDEM_80S_80MPP_ADJ_HILL.TIF",
+      "width": 7600,
+      "height": 7600,
+      "dtype": "float32",
+      "nodata": 0.0,
+      "nodata_is_nan": false,
+      "pixel_size_m": [
+        80.0,
+        80.0
+      ],
+      "bounds_m": [
+        -304000.0,
+        -304000.0,
+        304000.0,
+        304000.0
+      ],
+      "transform": [
+        80.0,
+        0.0,
+        -304000.0,
+        0.0,
+        -80.0,
+        304000.0
+      ],
+      "crs_proj4": "+proj=stere +lat_0=-90 +lat_ts=-90 +lon_0=0 +x_0=0 +y_0=0 +R=1737400 +units=m +no_defs=True",
+      "crs_wkt": null,
+      "overviews": [
+        2,
+        4,
+        8,
+        16
+      ],
+      "band_tags": {},
+      "sha256": "f669073ea6bf05ae97bce897e5e3c08f2ee9097a663c8cd3a758db296f373ae2",
+      "url": "https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/LDEM_80S_80MPP_ADJ_HILL.TIF"
+    },
+    "slope": {
+      "file": "LDSM_80S_80MPP_ADJ.TIF",
+      "width": 7600,
+      "height": 7600,
+      "dtype": "float32",
+      "nodata": null,
+      "nodata_is_nan": true,
+      "pixel_size_m": [
+        80.0,
+        80.0
+      ],
+      "bounds_m": [
+        -304000.0,
+        -304000.0,
+        304000.0,
+        304000.0
+      ],
+      "transform": [
+        80.0,
+        0.0,
+        -304000.0,
+        0.0,
+        -80.0,
+        304000.0
+      ],
+      "crs_proj4": "+proj=stere +lat_0=-90 +lat_ts=-90 +lon_0=0 +x_0=0 +y_0=0 +R=1737400 +units=m +no_defs=True",
+      "crs_wkt": null,
+      "overviews": [
+        2,
+        4,
+        8,
+        16
+      ],
+      "band_tags": {
+        "actual_range": "{0.0006158251781016588,88.63083648681641}",
+        "long_name": "z",
+        "NETCDF_VARNAME": "z",
+        "_FillValue": "nan"
+      },
+      "sha256": "d1270c4a69d01a8e4eb5503bd25713f0b2251dbb4ffee6c3161ef7a792c8f059",
+      "url": "https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/LDSM_80S_80MPP_ADJ.TIF"
+    },
+    "psr": {
+      "file": "LPSR_80S_20MPP_ADJ.TIF",
+      "width": 30400,
+      "height": 30400,
+      "dtype": "float32",
+      "nodata": null,
+      "nodata_is_nan": true,
+      "pixel_size_m": [
+        20.0,
+        20.0
+      ],
+      "bounds_m": [
+        -304000.0,
+        -304000.0,
+        304000.0,
+        304000.0
+      ],
+      "transform": [
+        20.0,
+        0.0,
+        -304000.0,
+        0.0,
+        -20.0,
+        304000.0
+      ],
+      "crs_proj4": "+proj=stere +lat_0=-90 +lat_ts=-90 +lon_0=0 +x_0=0 +y_0=0 +R=1737400 +units=m +no_defs=True",
+      "crs_wkt": null,
+      "overviews": [
+        2,
+        4,
+        8,
+        16,
+        32,
+        64
+      ],
+      "band_tags": {
+        "actual_range": "{0,1}",
+        "long_name": "z",
+        "NETCDF_VARNAME": "z",
+        "_FillValue": "nan"
+      },
+      "sha256": "ad95311b81db773039af441dd66a017f024327858c6e0314b8c92bf2f470834e",
+      "url": "https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/LPSR_80S_20MPP_ADJ.TIF"
+    }
+  },
+  "references": {
+    "paper": "Barker, M. K., et al. (2023). Planetary Science Journal, 4, 183.",
+    "paper_doi": "https://doi.org/10.3847/PSJ/acf3e1",
+    "data_doi": "https://doi.org/10.60903/gsfcpgda-lola-spole",
+    "source": "https://pgda.gsfc.nasa.gov/products/90"
+  },
+  "global": {
+    "source": "NASA Scientific Visualization Studio \u2014 CGI Moon Kit (public domain)",
+    "source_url": "https://svs.gsfc.nasa.gov/4720",
+    "projection": "equirectangular (simple cylindrical); column 0 west edge = 180\u00b0W, row 0 top edge = 90\u00b0N",
+    "registration_check": "longitude registration verified against LDEM_80S_80MPP_ADJ at 81\u00b0S (see README)",
+    "color": {
+      "file": "moon-color-4k.webp",
+      "width": 4096,
+      "height": 2048,
+      "source": "lroc_color_poles_4k.tif",
+      "encoding": "sRGB, lossy WebP q90 (visual only)"
+    },
+    "normal": {
+      "file": "moon-normal-2k.webp",
+      "width": 2880,
+      "height": 1440,
+      "encoding": "RGB = (east, north, up) unit normal, v = byte/127.5 \u2212 1",
+      "derived_from": "ldem_16.tif block-mean \u00d72 (8 px/deg)"
+    },
+    "height": {
+      "file": "moon-height-1440.f16",
+      "width": 1440,
+      "height": 720,
+      "dtype": "float16 little-endian",
+      "units": "km relative to 1737.4 km sphere",
+      "derived_from": "ldem_16.tif block-mean \u00d74 (4 px/deg)",
+      "min_km": -8.613062858581543,
+      "max_km": 10.428281784057617
+    }
+  }
+}

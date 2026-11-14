@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+@theme {
+  --color-space: #030509;
+  --color-panel: rgb(8 12 18 / 0.88);
+  --color-panel-solid: #0a0f17;
+  --color-line: rgb(148 170 196 / 0.14);
+  --color-line-strong: rgb(148 170 196 / 0.26);
+  --color-ink: #e8edf3;
+  --color-ink-soft: #a3aebd;
+  --color-ink-mute: #6c7889;
+  --color-accent: #5ec8d8;
+  --color-accent-deep: #2a8796;
+  --color-blue: #6b8cff;
+  --color-gold: #d9b26f;
+  --color-psr: #a879ff;
+  --font-sans: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--color-space);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* --- panels: flat and bordered. No backdrop-filter: blurring a 60 fps WebGL
+   canvas behind every panel would cost GPU time each frame. */
+.panel {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+}
+
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-ink-mute);
+  font-weight: 600;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+:where(button, [role="switch"], input[type="range"]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* --- range slider */
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+.range::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--color-line-strong);
+  border-radius: 2px;
+}
+.range::-moz-range-track {
+  height: 2px;
+  background: var(--color-line-strong);
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--color-ink);
+  border: 2px solid var(--color-accent);
+}
+.range::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-ink);
+  border: 2px solid var(--color-accent);
+}
+
+/* --- pole labels (DOM overlays in the 3D scene) */
+.pole-anchor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+.pole-label {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 5px 9px 6px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+  transform: translate(14px, -50%);
+  user-select: none;
+}
+.pole-label__title {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+}
+.pole-label__meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-ink-soft);
+}
+.pole-label__cue {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+  color: var(--color-ink-mute);
+  margin-left: 4px;
+}
+.pole-label--south {
+  background: rgb(6 22 28 / 0.82);
+  border: 1px solid rgb(94 200 216 / 0.55);
+  color: #bff3fa;
+  box-shadow: 0 0 18px rgb(94 200 216 / 0.18);
+}
+.pole-label--south .pole-label__dot {
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 3px rgb(94 200 216 / 0.25);
+}
+.pole-anchor.is-compact .pole-label__meta {
+  display: none;
+}
+.pole-anchor.is-compact .pole-label {
+  padding: 3px 7px;
+}
+.pole-label--north {
+  background: rgb(10 13 19 / 0.72);
+  border: 1px solid var(--color-line-strong);
+  color: var(--color-ink-soft);
+  transform: translate(-50%, calc(-100% - 8px));
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-line-strong);
+  border-top-color: var(--color-accent);
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.enter {
+  animation: fade-in 220ms var(--ease-out-quart) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2400ms;
+  }
+  .enter,
+  .pole-label {
+    animation: none;
+    transition: none;
+  }
+}

@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.env*.local
+# Original NASA GeoTIFFs (~650 MB) — fetch with scripts/download_lunar_data.py
+data/raw/*
+!data/raw/.gitkeep
+*.part
+__pycache__/
+.DS_Store
