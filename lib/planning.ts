@@ -36,6 +36,10 @@ export interface EllipseResult {
 }
 
 export interface FineMask {
+  /** Share of the ellipse in sunlight / with Earth in view / both, at this instant (%). */
+  litPct: number;
+  earthPct: number;
+  bothPct: number;
   data: Uint8Array;
   x0: number;
   y1: number;

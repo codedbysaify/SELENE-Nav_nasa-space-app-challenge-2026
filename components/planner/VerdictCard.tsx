@@ -91,7 +91,7 @@ export default function VerdictCard({ summary }: { summary: PlanSummary }) {
       </div>
 
       <div className="grid grid-cols-2 gap-1.5">
-        <KeyNumber label="Sunlit" value={`${summary.sunlitPct.toFixed(0)}%`} tip="sunlit" color="#ffd27a" />
+        <KeyNumber label="Sunlight" value={`${summary.sunlitPct.toFixed(0)}%`} tip="sunlit" color="#ffd27a" />
         <KeyNumber label="Longest darkness" value={fmtHours(summary.longestDarkH)} tip="darkness" />
         <KeyNumber label="Earth visible" value={`${summary.earthPct.toFixed(0)}%`} tip="earthVisible" color="#4fa8ff" />
         <KeyNumber label="Usable time" value={`${summary.usablePct.toFixed(0)}%`} tip="usable" color="#a9f5cd" />

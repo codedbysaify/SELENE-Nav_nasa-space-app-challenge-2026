@@ -39,7 +39,7 @@ export default function VerdictSettings({ onClose }: { onClose: () => void }) {
           </button>
         ))}
       </div>
-      <DualRange label="☀️ Power (sunlit)" unit="%" min={0} max={100} lo={t.power.risky} hi={t.power.good} higherIsBetter
+      <DualRange label="☀️ Power (sunlight)" unit="%" min={0} max={100} lo={t.power.risky} hi={t.power.good} higherIsBetter
         onChange={(lo, hi) => custom({ power: { risky: lo, good: hi } })} />
       <DualRange label="📡 Contact (Earth visible)" unit="%" min={0} max={100} lo={t.contact.risky} hi={t.contact.good} higherIsBetter
         onChange={(lo, hi) => custom({ contact: { risky: lo, good: hi } })} />

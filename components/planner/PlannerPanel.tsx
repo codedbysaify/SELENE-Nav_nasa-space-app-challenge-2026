@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { store, useAppStore } from "@/lib/store";
 import { earliestLandingMs, loadEphemeris, type Ephemeris } from "@/lib/ephemeris";
-import { confirmDate, editDate, runAnalysis, setEllipse, startDrawing, DEFAULT_ELLIPSE } from "@/lib/planner-actions";
+import { confirmDate, editDate, focusEllipse, runAnalysis, setEllipse, startDrawing, DEFAULT_ELLIPSE } from "@/lib/planner-actions";
 import { formatLat, formatLon } from "@/lib/lunar-coordinates";
 import { SITE_LABELS } from "@/lib/sites";
 import { EARTH_COLOR, SUN_COLOR } from "@/lib/shaders";
@@ -229,8 +229,10 @@ export default function PlannerPanel() {
                       const s = SITE_LABELS.find((l) => l.key === e.target.value);
                       if (s) {
                         const cur = store.get().ellipse;
-                        setEllipse({ lat: s.lat, lon: s.lon, aKm: cur?.aKm ?? DEFAULT_ELLIPSE.aKm, bKm: cur?.bKm ?? DEFAULT_ELLIPSE.bKm, headingDeg: cur?.headingDeg ?? 0 });
+                        const e = { lat: s.lat, lon: s.lon, aKm: cur?.aKm ?? DEFAULT_ELLIPSE.aKm, bKm: cur?.bKm ?? DEFAULT_ELLIPSE.bKm, headingDeg: cur?.headingDeg ?? 0 };
+                        setEllipse(e);
                         store.set({ drawing: false });
+                        focusEllipse(e);
                       }
                     }}
                   >
@@ -292,7 +294,7 @@ export default function PlannerPanel() {
                   <Line k="" v={changeText("sun", analysis.sun.visibleAtLanding, analysis.sun.hoursUntilChange)} />
                   <Line k="📡 Earth" v={skyLine("Earth", analysis.series[3], analysis.series[4])} tone={analysis.earth.visibleAtLanding ? EARTH_COLOR : "#f0a089"} />
                   <Line k="" v={changeText("earth", analysis.earth.visibleAtLanding, analysis.earth.hoursUntilChange)} />
-                  <Line k="Ellipse sunlit at landing" v={`${analysis.landing.litAreaPct.toFixed(0)}% of area`} />
+                  <Line k="Ellipse in sunlight at landing" v={`${analysis.landing.litAreaPct.toFixed(0)}% of area`} />
                   <Line k="Ellipse in Earth view at landing" v={`${analysis.landing.earthAreaPct.toFixed(0)}% of area`} />
                 </Details>
 
@@ -317,7 +319,7 @@ export default function PlannerPanel() {
                   <ElevationChart series={analysis.series} hours={analysis.hours} landingMs={landingMs} timeMs={timeMs} />
                   <Line k="Longest darkness at the centre" tip="darkness" v={fmtDuration(analysis.mission.centreLongestNightH)} />
                   <Line k="Usable time at the centre" tip="usable" v={`${analysis.mission.bothPctCentre.toFixed(0)}%`} />
-                  <Line k="Sunlit, across the ellipse" v={`${analysis.mission.sunlitMinPct.toFixed(0)}–${analysis.mission.sunlitMaxPct.toFixed(0)}%`} />
+                  <Line k="Sunlight, across the ellipse" v={`${analysis.mission.sunlitMinPct.toFixed(0)}–${analysis.mission.sunlitMaxPct.toFixed(0)}%`} />
                 </Details>
 
                 <Details title="horizon panorama (centre)">

@@ -463,17 +463,27 @@ function ellipseHour(ms: number) {
   const { grid, cells, hz, count } = ell;
   const out = new Uint8Array(grid.w * grid.h * 4);
   const s = sub(ms);
+  let litSum = 0, earthN = 0, bothN = 0;
   for (let j = 0; j < grid.w * grid.h; j++) {
     const i = grid.idx[j];
     if (i < 0 || i >= count) continue;
     const lat = cells[i * 4 + 2], lon = cells[i * 4 + 3], off = i * HORIZON_DIRS;
     const sp = skyPosition(lat, lon, s.sunLat, s.sunLon);
     const ep = skyPosition(lat, lon, s.earthLat, s.earthLon);
-    out[j * 4] = Math.round(sunFraction(sp.el, horizonAt(hz, off, HORIZON_DIRS, sp.az, false)) * 255);
-    out[j * 4 + 1] = earthTopocentric(ep.el, s.dist) > horizonAt(hz, off, HORIZON_DIRS, ep.az, false) ? 255 : 0;
+    const fr = sunFraction(sp.el, horizonAt(hz, off, HORIZON_DIRS, sp.az, false));
+    const ev = earthTopocentric(ep.el, s.dist) > horizonAt(hz, off, HORIZON_DIRS, ep.az, false);
+    out[j * 4] = Math.round(fr * 255);
+    out[j * 4 + 1] = ev ? 255 : 0;
     out[j * 4 + 3] = 255;
+    litSum += fr;
+    if (ev) earthN++;
+    if (ev && fr > 0) bothN++;
   }
-  return { data: out, x0: grid.x0, y1: grid.y0, cellKm: grid.stride, w: grid.w, h: grid.h };
+  return {
+    data: out, x0: grid.x0, y1: grid.y0, cellKm: grid.stride, w: grid.w, h: grid.h,
+    // share of the ellipse (80 m cells) with sunlight / Earth in view / both, at this instant
+    litPct: (litSum / count) * 100, earthPct: (earthN / count) * 100, bothPct: (bothN / count) * 100,
+  };
 }
 
 /* ---------------------------------------------------------------- searches (overview grid, same Sun/Earth rules) */

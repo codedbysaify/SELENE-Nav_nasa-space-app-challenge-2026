@@ -122,6 +122,15 @@ export default function CameraController() {
           if (factor < 1 && lnD < LN_FOCUS_END) requestHighResTerrain();
           tweenTo({ lnD }, 0.9, "power2.out");
         },
+        focusOn: (lat: number, lon: number, radiusKm: number) => {
+          requestHighResTerrain();
+          // Pan = rotation that carries the pole point onto (lat, lon): angle = distance from the pole.
+          const ang = (90 + lat) * DEG;
+          const dx = Math.sin(lon * DEG), dz = Math.cos(lon * DEG); // horizontal direction of lon in the scene
+          const dist = Math.min(Math.max(radiusKm * 5.5, CAMERA.minDistanceKm * 1.4), CAMERA.poleFocusStartKm * 0.9);
+          const from = cur.current.lnD, to = Math.log(dist);
+          tweenTo({ lnD: to, tilt: 32, panX: R * ang * dx, panZ: R * ang * dz }, Math.abs(from - to) > 1.5 ? 3.2 : 1.8);
+        },
       },
     });
 

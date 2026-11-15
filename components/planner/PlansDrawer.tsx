@@ -18,7 +18,7 @@ import type { GlossaryKey } from "@/lib/glossary";
 type Col = "rank" | "sunlit" | "earth" | "usable" | "dark" | "slope" | "date";
 const COLS: { id: Col; label: string; tip?: GlossaryKey; higherBetter: boolean }[] = [
   { id: "usable", label: "Usable", tip: "usable", higherBetter: true },
-  { id: "sunlit", label: "Sunlit", tip: "sunlit", higherBetter: true },
+  { id: "sunlit", label: "Sunlight", tip: "sunlit", higherBetter: true },
   { id: "earth", label: "Earth", tip: "earthVisible", higherBetter: true },
   { id: "dark", label: "Darkness", tip: "darkness", higherBetter: false },
   { id: "slope", label: "Slope", tip: "slope", higherBetter: false },

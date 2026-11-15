@@ -14,7 +14,7 @@ export const GLOSSARY = {
   contact: "Contact: the share of the mission during which Earth is above the surrounding terrain, so the lander can talk to Earth directly, without a relay satellite.",
   terrain: "Terrain: the average ground slope inside the ellipse. Steep ground can tip a lander over.",
   darkness: "Longest darkness: the longest unbroken period with the Sun completely hidden. The lander must survive this on batteries, in extreme cold.",
-  sunlit: "Sunlit: the share of mission hours with the Sun visible, averaged over the ellipse.",
+  sunlit: "Sunlight: the share of mission hours with the Sun visible, averaged over the ellipse.",
   earthVisible: "Earth visible: the share of mission hours with Earth in direct view, averaged over the ellipse.",
   usable: "Usable time: the share of the mission when the Sun AND Earth are both visible, so the lander has power and a radio link at the same time.",
   psr: "PSR (permanently shadowed region): ground that never receives direct sunlight. It is extremely cold and may hold water ice.",

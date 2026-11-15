@@ -111,7 +111,7 @@ export function computeVerdict(s: PlanSummary, t: Thresholds): Verdict {
   const terrain = gradeLow(s.slopeMeanDeg, t.slope);
   const dark = gradeLow(s.longestDarkH, t.darkness);
   const rows: Row[] = [
-    { key: "power", icon: "☀️", label: "Power", value: `${s.sunlitPct.toFixed(0)}% sunlit`, grade: power,
+    { key: "power", icon: "☀️", label: "Power", value: `${s.sunlitPct.toFixed(0)}% sunlight`, grade: power,
       need: power === "good" ? `✅ at ${t.power.good}% or more` : `needs ≥${t.power.good}% for ✅ · below ${t.power.risky}% is ❌` },
     { key: "contact", icon: "📡", label: "Contact", value: `${s.earthPct.toFixed(0)}% Earth in view`, grade: contact,
       need: contact === "good" ? `✅ at ${t.contact.good}% or more` : `needs ≥${t.contact.good}% for ✅ · below ${t.contact.risky}% is ❌` },
@@ -143,7 +143,7 @@ function whySentence(
           : "Both the Sun and Earth stay below the local horizon for most of this mission window.",
     );
   } else {
-    if (g.power === "bad") parts.push(`The Sun is hidden for most of the mission (only ${s.sunlitPct.toFixed(0)}% sunlit), so solar power is scarce.`);
+    if (g.power === "bad") parts.push(`The Sun is hidden for most of the mission (only ${s.sunlitPct.toFixed(0)}% sunlight), so solar power is scarce.`);
     else if (g.power === "risky") parts.push(`Sunlight is available ${s.sunlitPct.toFixed(0)}% of the time, with dark gaps up to ${fmtHours(s.longestDarkH)}.`);
     if (g.contact === "bad") parts.push(`Earth is below the local horizon most of the time (${s.earthPct.toFixed(0)}% in view), so direct radio contact is rare.`);
     else if (g.contact === "risky") parts.push(`Earth is in view ${s.earthPct.toFixed(0)}% of the time, so contact drops out for part of the mission.`);

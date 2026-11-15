@@ -58,6 +58,8 @@ export interface CameraApi {
   returnToGlobalView: () => void;
   zoomBy: (factor: number) => void;
   resetCamera: () => void;
+  /** Fly to a surface point (lat/lon °) and frame a feature of the given radius (km). */
+  focusOn: (lat: number, lon: number, radiusKm: number) => void;
 }
 
 export interface AppState {
@@ -85,6 +87,8 @@ export interface AppState {
   suggestOpen: boolean;
   suggestion: Suggestion | null;
   searchProgress: { value: number; label: string } | null;
+  /** Ellipse-wide Sun / Earth availability at the time-slider position (80 m). */
+  timeStats: { ms: number; litPct: number; earthPct: number; bothPct: number } | null;
   viewMode: ViewMode;
   /** 0 = global, 1 = fully pole-focused (from camera distance). */
   poleFocus: number;
@@ -124,6 +128,7 @@ const initial: AppState = {
   suggestOpen: false,
   suggestion: null,
   searchProgress: null,
+  timeStats: null,
   viewMode: "global",
   poleFocus: 0,
   altitudeKm: 0,

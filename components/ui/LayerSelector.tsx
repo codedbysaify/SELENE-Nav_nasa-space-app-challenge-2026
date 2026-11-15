@@ -88,10 +88,10 @@ const ANALYSIS_OPTIONS: { id: AnalysisLayer; label: string; group: "off" | "now"
   { id: "none", label: "Off", group: "off" },
   { id: "now-sun", label: "Sunlight & shadows", group: "now" },
   { id: "now-earth", label: "Earth in view", group: "now" },
-  { id: "mission-sun", label: "Sunlit %", group: "mission" },
+  { id: "mission-sun", label: "Sunlight %", group: "mission" },
   { id: "mission-earth", label: "Earth visible %", group: "mission" },
   { id: "mission-night", label: "Longest night", group: "mission" },
-  { id: "annual-sun", label: "Sunlit %", group: "annual" },
+  { id: "annual-sun", label: "Sunlight %", group: "annual" },
   { id: "annual-earth", label: "Earth visible %", group: "annual" },
   { id: "annual-night", label: "Longest night", group: "annual" },
 ];

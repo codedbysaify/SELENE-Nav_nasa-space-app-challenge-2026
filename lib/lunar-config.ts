@@ -39,7 +39,7 @@ export const CAMERA = {
   /** Azimuth 90° places the camera over 0° longitude (Earth-facing side). */
   initialAzimuthDeg: 90,
   /** Pan is a rotation of the rig about the Moon centre, limited inside the 80°S cap. */
-  maxPanKm: 190,
+  maxPanKm: 320,
   minClearanceKm: 6,
   damping: 7.5,
 } as const;

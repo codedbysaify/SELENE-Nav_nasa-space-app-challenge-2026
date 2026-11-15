@@ -36,13 +36,13 @@ export default function SeleneNavApp() {
       <SiteLabels />
       <TopBar />
       {/* left column: mission planner */}
-      <div className="pointer-events-none absolute bottom-[178px] left-3 top-[68px] z-[22] flex flex-col md:left-4 max-md:right-3">
+      <div className="pointer-events-none absolute bottom-[178px] max-xl:bottom-[250px] left-3 top-[68px] z-[22] flex flex-col md:left-4 max-md:right-3">
         <div className="pointer-events-auto flex max-h-full min-h-0">
           <PlannerPanel />
         </div>
       </div>
       {/* right column: layers + telemetry */}
-      <div className="pointer-events-none absolute bottom-[178px] right-3 top-[68px] z-20 flex w-[280px] max-w-[calc(100vw-24px)] flex-col md:right-4 max-md:left-3 max-md:top-[116px] max-md:w-auto">
+      <div className="pointer-events-none absolute bottom-[178px] max-xl:bottom-[250px] right-3 top-[68px] z-20 flex w-[280px] max-w-[calc(100vw-24px)] flex-col md:right-4 max-md:left-3 max-md:top-[116px] max-md:w-auto">
         <SidePanel />
       </div>
       <TimeBar />

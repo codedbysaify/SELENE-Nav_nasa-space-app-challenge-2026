@@ -17,6 +17,15 @@ export const planData: { mission: Uint8Array | null; missionVersion: number; ste
 
 export const DEFAULT_ELLIPSE = { aKm: 5, bKm: 2.5, headingDeg: 0 };
 
+/* ---------------------------------------------------------------- camera */
+/** Fly the camera to an ellipse (or the current one) and frame it. Retries until the camera rig exists. */
+export function focusEllipse(e: EllipseSpec | null = store.get().ellipse, tries = 20) {
+  if (!e) return;
+  const api = store.get().cameraApi;
+  if (api) api.focusOn(e.lat, e.lon, Math.max(e.aKm, e.bKm));
+  else if (tries > 0) setTimeout(() => focusEllipse(e, tries - 1), 300);
+}
+
 /* ---------------------------------------------------------------- date + ellipse */
 export function confirmDate(landingMs: number, missionDays: number) {
   store.set({
@@ -63,6 +72,7 @@ export async function runAnalysis() {
     if (my !== runId) return;
     // The map stays static: no layer is switched on automatically.
     store.set({ analysis: result, planStep: "results", timeMs: s.landingMs, analysisProgress: null });
+    focusEllipse(s.ellipse);
     // Whole-region mission statistics (optional layers) are prepared quietly in the background.
     const w = await overviewWindow(s.landingMs, hours);
     if (my !== runId) return;
@@ -108,11 +118,14 @@ export async function findBetterNearby() {
       return;
     }
     const ellipse = { ...s.ellipse, lat: r.lat, lon: r.lon };
+    // frame both the current and the suggested ellipse
+    const mid = { ...ellipse, lat: (ellipse.lat + s.ellipse.lat) / 2, lon: ellipse.lon, aKm: Math.max(ellipse.aKm, 10) };
+    focusEllipse(Math.abs(ellipse.lon - s.ellipse.lon) < 20 ? mid : ellipse);
     store.set({
       searchProgress: null,
       suggestion: {
         kind: "nearby", ellipse, landingMs: null, missionDays: null, usablePct: r.usablePct, areaKm2: ellipseAreaKm2(ellipse),
-        note: `Sunlit ${r.sunlitPct.toFixed(0)}% · Earth ${r.earthPct.toFixed(0)}% · slope ${r.slopeDeg.toFixed(1)}°, averaged over the ellipse (1.28 km grid estimate)`,
+        note: `Sunlight ${r.sunlitPct.toFixed(0)}% · Earth ${r.earthPct.toFixed(0)}% · slope ${r.slopeDeg.toFixed(1)}°, averaged over the ellipse (1.28 km grid estimate)`,
       },
     });
   } catch (e) {
@@ -143,8 +156,7 @@ export async function suggestGlobal(rangeStartMs: number, rangeEndMs: number, mi
         note: `${r.cellsSearched.toLocaleString("en-US")} places × ${r.timesTested} landing times tested · slope ${r.slopeDeg.toFixed(1)}°, averaged over the ellipse (1.28 km grid estimate)`,
       },
     });
-    requestHighResTerrain();
-    store.get().cameraApi?.flyToSouthPole();
+    focusEllipse(ellipse);
   } catch (e) {
     console.error(e);
     store.set({ searchProgress: null });
@@ -215,8 +227,7 @@ export function loadPlan(id: string) {
     analysis: null, missionLayersReady: false, planStep: "draw", drawing: false, playing: false, suggestion: null,
   });
   dropEllipseLayers();
-  requestHighResTerrain();
-  store.get().cameraApi?.flyToSouthPole();
+  focusEllipse(p.ellipse);
   void runAnalysis();
 }
 
@@ -242,9 +253,7 @@ export async function initPlanner() {
       if (landingMs < eph.startMs || landingMs > eph.endMs - 90 * 86400e3) return;
       store.set({ landingMs, missionDays, ellipse, timeMs: landingMs, planStep: "draw", drawing: false });
       requestHighResTerrain();
-      // wait for the camera rig, then fly and analyse
-      const fly = () => (store.get().cameraApi ? store.get().cameraApi!.flyToSouthPole() : setTimeout(fly, 300));
-      fly();
+      focusEllipse(ellipse);
       void runAnalysis();
     } catch (e) {
       console.error(e);

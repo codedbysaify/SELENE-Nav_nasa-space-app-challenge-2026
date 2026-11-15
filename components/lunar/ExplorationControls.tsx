@@ -1,5 +1,7 @@
 "use client";
 import { useLunarCamera } from "@/hooks/useLunarCamera";
+import { useAppStore } from "@/lib/store";
+import { focusEllipse } from "@/lib/planner-actions";
 import { IconGlobe, IconMinus, IconPlus, IconReset, IconTarget } from "@/components/ui/icons";
 
 function IconButton({ label, kbd, onClick, children }: { label: string; kbd?: string; onClick: () => void; children: React.ReactNode }) {
@@ -18,6 +20,7 @@ function IconButton({ label, kbd, onClick, children }: { label: string; kbd?: st
 
 export default function ExplorationControls() {
   const cam = useLunarCamera();
+  const hasEllipse = useAppStore((s) => !!s.ellipse);
   const atPole = cam.viewMode === "terrain";
   const atGlobal = cam.viewMode === "global";
 
@@ -49,6 +52,17 @@ export default function ExplorationControls() {
         <span className="hidden lg:inline">Return to Global View</span>
         <span className="lg:hidden">Global view</span>
       </button>
+      {hasEllipse && (
+        <button
+          type="button"
+          onClick={() => focusEllipse()}
+          title="Fly to the landing ellipse"
+          className="flex h-9 items-center gap-1.5 rounded-md px-3 text-[13px] text-[#f3dca9] transition-colors hover:bg-gold/10"
+        >
+          <span aria-hidden>🎯</span>
+          <span>Ellipse</span>
+        </button>
+      )}
       <span className="mx-1 h-5 w-px bg-line-strong" />
       <IconButton label="Zoom in" kbd="+" onClick={cam.zoomIn}>
         <IconPlus />

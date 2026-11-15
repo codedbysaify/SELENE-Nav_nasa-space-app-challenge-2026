@@ -130,7 +130,7 @@ export default function AboutPanel() {
           <p className="num mt-1.5 text-[11.5px] text-ink">sin(el) = sin φ·sin φb + cos φ·cos φb·cos(λ − λb)</p>
           <ul className="mt-1.5 list-disc space-y-1 pl-4">
             <li>Earth parallax: el′ = atan2(sin el − R/d, cos el), using the Earth–Moon distance d (up to 0.26°).</li>
-            <li>Sun disc radius 0.27°: partly lit while el + 0.27° &gt; horizon; disc-weighted sunlit %.</li>
+            <li>Sun disc radius 0.27°: partly lit while el + 0.27° &gt; horizon; disc-weighted sunlight %.</li>
             <li>Earth counts as visible when its centre is above the terrain horizon.</li>
           </ul>
 

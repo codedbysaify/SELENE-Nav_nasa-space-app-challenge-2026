@@ -73,6 +73,7 @@ export default function PlanOverlay() {
       busy = true;
       try {
         const fine = store.get().analysis ? await ellipseAt(ms) : null;
+        if (fine) store.set({ timeStats: { ms, litPct: fine.litPct, earthPct: fine.earthPct, bothPct: fine.bothPct } });
         if (fine) {
           if (!fineTex || fineTex.image.width !== fine.w || fineTex.image.height !== fine.h) {
             fineTex?.dispose();
@@ -129,7 +130,7 @@ export default function PlanOverlay() {
         sharedUniforms.uPlanTex.value = missionTex;
       }
 
-      if (layer.startsWith("now") && s.analysis && s.timeMs !== null) {
+      if (s.analysis && s.timeMs !== null) {
         const key = `${s.timeMs}|${s.analysis.count}|${s.analysis.centre.lat}|${s.analysis.centre.lon}`;
         if (key !== lastKey) {
           lastKey = key;
@@ -138,6 +139,7 @@ export default function PlanOverlay() {
       } else if (!s.analysis) {
         sharedUniforms.uFineOn.value = 0;
         lastKey = "";
+        if (s.timeStats) store.set({ timeStats: null });
       }
     };
     sync();

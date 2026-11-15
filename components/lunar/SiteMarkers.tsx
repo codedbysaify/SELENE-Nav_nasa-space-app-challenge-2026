@@ -35,16 +35,20 @@ export function SiteMarkers() {
     const exag = sharedUniforms.uExag.value;
     const ell = store.get().ellipse;
     placed.length = 0;
+    // With an ellipse: labels within 30 km of it, and always the 3 nearest named places for orientation.
+    let keep: Set<string> | null = null;
+    if (ell) {
+      const near = SITE_LABELS.map((x) => ({ k: x.key, d: surfaceDistanceKm({ lat: x.lat, lon: x.lon }, { lat: ell.lat, lon: ell.lon }) }))
+        .sort((p, q) => p.d - q.d);
+      keep = new Set(near.filter((x, i) => i < 3 || x.d <= NEAR_ELLIPSE_KM + ell.aKm).map((x) => x.k));
+    }
     for (const s of PRIORITY) {
       const el = els.get(s.key);
       if (!el) continue;
       const hide = () => (el.style.visibility = "hidden");
       if (show < 0.02) { hide(); continue; }
       // once an ellipse exists, only labels within ~30 km of it
-      if (ell) {
-        const d = surfaceDistanceKm({ lat: s.lat, lon: s.lon }, { lat: ell.lat, lon: ell.lon });
-        if (d > NEAR_ELLIPSE_KM + ell.aKm) { hide(); continue; }
-      }
+      if (keep && !keep.has(s.key)) { hide(); continue; }
       latLonToDir(s.lat, s.lon, dir);
       const h = ((sampleHeightM(s.lat, s.lon) ?? 0) / 1000) * exag;
       v.set(dir[0], dir[1], dir[2]).multiplyScalar(R + h + 0.4);
