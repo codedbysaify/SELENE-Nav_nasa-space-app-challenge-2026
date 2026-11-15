@@ -143,9 +143,21 @@ export default function CameraController() {
       return r ? { lat: r.lat, lon: r.lon } : null;
     };
 
+    /* ---- pinning: only "clean" clicks (press and release without dragging) count */
+    let press: { x: number; y: number; moved: boolean; button: number } | null = null;
+    let lastClean: { t: number; x: number; y: number } | null = null;
+    const pinAt = (clientX: number, clientY: number) => {
+      if (store.get().drawing) return; // never while drawing the landing ellipse
+      const rect = el.getBoundingClientRect();
+      const r = pickSurface(camera, clientX - rect.left, clientY - rect.top, { width: rect.width, height: rect.height },
+        sharedUniforms.uExag.value);
+      if (r) store.set({ pinned: r, pinMode: false });
+    };
+
     const onDown = (e: PointerEvent) => {
       el.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      press = pointers.size === 1 ? { x: e.clientX, y: e.clientY, moved: false, button: e.button } : null;
       kill();
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
@@ -172,6 +184,7 @@ export default function CameraController() {
       pointer.current = { x: e.clientX - rect.left, y: e.clientY - rect.top, inside: true, dirty: true };
       const prev = pointers.get(e.pointerId);
       if (!prev) return;
+      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 5) press.moved = true;
       const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       const g = goal.current;
@@ -219,13 +232,25 @@ export default function CameraController() {
     };
     const onUp = (e: PointerEvent) => {
       pointers.delete(e.pointerId);
+      // A clean click: Pin button armed → pin now; two clean clicks close together → double-click pin.
+      if (press && !press.moved && press.button === 0 && mode !== "draw" && !store.get().drawing) {
+        const now = performance.now();
+        if (store.get().pinMode) {
+          pinAt(e.clientX, e.clientY);
+          lastClean = null;
+        } else if (lastClean && now - lastClean.t < 400 && Math.hypot(e.clientX - lastClean.x, e.clientY - lastClean.y) < 8) {
+          pinAt(e.clientX, e.clientY);
+          lastClean = null;
+        } else lastClean = { t: now, x: e.clientX, y: e.clientY };
+      } else lastClean = null;
+      press = null;
       if (pointers.size === 0) {
         if (mode === "draw") {
           drawCentre = null;
           store.set({ drawing: false });
         }
         mode = null;
-        el.style.cursor = store.get().drawing ? "crosshair" : "grab";
+        el.style.cursor = store.get().drawing || store.get().pinMode ? "crosshair" : "grab";
       }
     };
     const onWheel = (e: WheelEvent) => {
@@ -252,6 +277,18 @@ export default function CameraController() {
         case "ArrowRight": kill(); g.az += 8; break;
         case "ArrowUp": kill(); g.tilt -= 5; break;
         case "ArrowDown": kill(); g.tilt += 5; break;
+        case "p": case "P": {
+          const s = store.get();
+          if (s.drawing || !s.cursor) return;
+          store.set({ pinned: s.cursor, pinMode: false });
+          break;
+        }
+        case "Escape": {
+          const s = store.get();
+          if (!s.pinned && !s.pinMode) return;
+          store.set({ pinned: null, pinMode: false });
+          break;
+        }
         default: return;
       }
       e.preventDefault();

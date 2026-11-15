@@ -37,6 +37,7 @@ export const ANALYSIS_RAMP: RampStop[] = [
 export const EARTH_COLOR = "#4fa8ff";
 export const SUN_COLOR = "#ffd27a";
 export const ELLIPSE_COLOR = "#ffcf5c";
+export const GHOST_COLOR = "#7df0b0";
 
 /** Slope ramp; t = slope / 45° (clamped). */
 export const SLOPE_MAX_DEG = 45;
@@ -222,6 +223,11 @@ export const TERRAIN_FRAGMENT = /* glsl */ `
   uniform vec4 uEllipse;        // centre x, y (km) and major-axis unit vector
   uniform vec2 uEllipseAB;      // semi-axes km
   uniform float uEllipseOn;
+  uniform float uFocus;         // 1 after analysis: layers only inside the ellipse, outside dimmed
+  uniform vec2 uElevLocal;      // ellipse elevation range in uScience.r units (lo, hi)
+  uniform vec4 uGhost;          // suggested ellipse (same encoding as uEllipse)
+  uniform vec2 uGhostAB;
+  uniform float uGhostOn;
   uniform sampler2D uVisual;   // r: NASA hillshade, g/b: normal x/y (map frame)
   uniform sampler2D uScience;  // r: elevation, g: slope, b: PSR fraction
   uniform sampler2D uGlobeColor;
@@ -271,9 +277,20 @@ export const TERRAIN_FRAGMENT = /* glsl */ `
     // Near the pole the Sun is always within ~1.6° of the horizon: use a narrow day/night transition there.
     float polarDay = smoothstep(-0.05, 0.05, dot(U, L));
 
+    // --- landing-ellipse geometry (k < 1 inside)
+    float ellK = 9.0;
+    if (uEllipseOn > 0.5) {
+      vec2 dv = vMap - uEllipse.xy;
+      ellK = length(vec2(dot(dv, uEllipse.zw), dot(dv, vec2(-uEllipse.w, uEllipse.z))) / uEllipseAB);
+    }
+    // uFocus = 1 after an analysis: layers apply only inside the ellipse.
+    float focusOut = uFocus * step(1.0, ellK);
+
     // --- base layers
     vec3 hill = srgbToLinear(vec3(vis.r)) * mix(0.16, 1.0, polarDay);
-    vec3 elev = elevationRamp(sci.r) * (0.30 + 0.95 * lit);
+    // inside an analysed ellipse the elevation ramp is stretched to the ellipse's own min–max
+    float elevT = mix(sci.r, clamp((sci.r - uElevLocal.x) / max(uElevLocal.y - uElevLocal.x, 1e-4), 0.0, 1.0), uFocus);
+    vec3 elev = elevationRamp(elevT) * (0.30 + 0.95 * lit);
     vec3 slope = slopeRamp(sci.g * 90.0 / ${SLOPE_MAX_DEG.toFixed(1)}) * (0.40 + 0.80 * lit);
     vec3 color = hill * uLayerW.x + elev * uLayerW.y + slope * uLayerW.z;
 
@@ -281,51 +298,59 @@ export const TERRAIN_FRAGMENT = /* glsl */ `
     float psr = sci.b;
     color = mix(color, PSR_COLOR * (0.55 + 0.45 * dayside), smoothstep(0.0, 0.5, psr) * uPsr * 0.88);
 
+    // outside the analysed ellipse: plain grey hillshade, dimmed
+    color = mix(color, hill * 0.42, focusOut);
+
     // --- seamless blend into the global LROC mosaic towards 80°S
     float rho = length(vMap);
     if (uHasGlobe > 0.5) {
       float edge = max(smoothstep(CAP_R - 30.0, CAP_R - 1.0, rho) * uEdgeBlend, uGlobeMix);
       vec2 guv = seamSafe(globeUv(U));
       vec3 gcol = texture2D(uGlobeColor, guv).rgb * (lit * 1.55 + 0.012);
-      color = mix(color, gcol, edge);
+      color = mix(color, gcol * mix(1.0, 0.55, uFocus), edge);
     }
 
-    // --- Sun / Earth analysis overlays (terrain horizon, real ephemeris)
+    // --- Sun / Earth overlays
     if (uPlanMode > 0.5) {
-      vec4 pv = texture2D(uPlanTex, vec2(vUv.x, 1.0 - vUv.y));
-      if (uFineOn > 0.5) {
-        vec2 fuv = vec2((vMap.x - uFineBox.x) / uFineBox.z, (uFineBox.y - vMap.y) / uFineBox.w);
-        if (all(greaterThanEqual(fuv, vec2(0.0))) && all(lessThanEqual(fuv, vec2(1.0)))) {
-          vec4 fv = texture2D(uFineTex, fuv);
-          if (fv.a > 0.5) pv.rg = fv.rg;   // 80 m result inside the ellipse
-        }
-      }
       float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
       vec3 base = vec3(luma);
-      vec3 ov = color;
-      if (uPlanMode < 1.5) {                 // Sun now: shadowed terrain goes dark, lit terrain warm
-        ov = mix(base * 0.10 + vec3(0.002, 0.004, 0.012), base * 1.05 + ${hexToLinearVec3(SUN_COLOR)} * 0.05, pv.r);
-      } else if (uPlanMode < 2.5) {          // Earth now: blue where Earth is above the terrain horizon
-        ov = mix(base * 0.35, base * 0.55 + ${hexToLinearVec3(EARTH_COLOR)} * 0.45, pv.g);
-      } else if (uPlanMode < 3.5) {
-        ov = analysisRamp(pv.r) * (0.55 + 0.6 * luma);
-      } else if (uPlanMode < 4.5) {
-        ov = analysisRamp(pv.g) * (0.55 + 0.6 * luma);
+      if (uPlanMode < 2.5) {
+        // Time-dependent layers: ONLY inside the analysed ellipse (80 m result for the slider time).
+        if (uFineOn > 0.5 && ellK < 1.0) {
+          vec2 fuv = vec2((vMap.x - uFineBox.x) / uFineBox.z, (uFineBox.y - vMap.y) / uFineBox.w);
+          vec4 fv = texture2D(uFineTex, fuv);
+          if (fv.a > 0.5) {
+            vec3 ov = uPlanMode < 1.5
+              ? mix(base * 0.08 + vec3(0.002, 0.004, 0.012), base * 1.05 + ${hexToLinearVec3(SUN_COLOR)} * 0.06, fv.r)
+              : mix(base * 0.30, base * 0.55 + ${hexToLinearVec3(EARTH_COLOR)} * 0.45, fv.g);
+            color = mix(color, ov, uPlanOpacity);
+          }
+        }
       } else {
-        ov = analysisRamp(1.0 - pv.b) * (0.55 + 0.6 * luma);
+        // Whole-region statistics maps (optional scouting layers; not time-dependent).
+        vec4 pv = texture2D(uPlanTex, vec2(vUv.x, 1.0 - vUv.y));
+        float v = uPlanMode < 3.5 ? pv.r : uPlanMode < 4.5 ? pv.g : 1.0 - pv.b;
+        color = mix(color, analysisRamp(v) * (0.55 + 0.6 * max(luma, dot(hill, vec3(0.333)))), uPlanOpacity * step(rho, CAP_R + 0.5));
       }
-      color = mix(color, ov, uPlanOpacity * step(rho, CAP_R + 0.5));
     }
 
-    // --- landing ellipse
+    // --- landing ellipse outline
     if (uEllipseOn > 0.5) {
-      vec2 dv = vMap - uEllipse.xy;
-      vec2 pq = vec2(dot(dv, uEllipse.zw), dot(dv, vec2(-uEllipse.w, uEllipse.z))) / uEllipseAB;
-      float k = length(pq);
-      float fw = max(fwidth(k), 1e-5);
-      float ring = 1.0 - smoothstep(1.2 * fw, 2.6 * fw, abs(k - 1.0));
+      float fw = max(fwidth(ellK), 1e-5);
+      float ring = 1.0 - smoothstep(1.2 * fw, 2.6 * fw, abs(ellK - 1.0));
       color = mix(color, ${hexToLinearVec3(ELLIPSE_COLOR)}, ring * 0.95);
-      color += ${hexToLinearVec3(ELLIPSE_COLOR)} * 0.035 * step(k, 1.0);
+      color += ${hexToLinearVec3(ELLIPSE_COLOR)} * 0.03 * step(ellK, 1.0) * (1.0 - uFocus);
+    }
+    // --- suggested ("ghost") ellipse: dashed outline
+    if (uGhostOn > 0.5) {
+      vec2 gd = vMap - uGhost.xy;
+      vec2 gp = vec2(dot(gd, uGhost.zw), dot(gd, vec2(-uGhost.w, uGhost.z))) / uGhostAB;
+      float gk = length(gp);
+      float gw = max(fwidth(gk), 1e-5);
+      float gring = 1.0 - smoothstep(1.4 * gw, 3.0 * gw, abs(gk - 1.0));
+      float dash = step(0.5, fract(atan(gp.y, gp.x) / (2.0 * PI) * 28.0));
+      color = mix(color, ${hexToLinearVec3(GHOST_COLOR)}, gring * dash);
+      color += ${hexToLinearVec3(GHOST_COLOR)} * 0.06 * step(gk, 1.0);
     }
 
     // --- South Pole highlight (global view)
@@ -359,6 +384,11 @@ export const sharedUniforms = {
   uEllipse: { value: new THREE.Vector4(0, 0, 0, 1) },
   uEllipseAB: { value: new THREE.Vector2(1, 1) },
   uEllipseOn: { value: 0 },
+  uFocus: { value: 0 },
+  uElevLocal: { value: new THREE.Vector2(0, 1) },
+  uGhost: { value: new THREE.Vector4(0, 0, 0, 1) },
+  uGhostAB: { value: new THREE.Vector2(1, 1) },
+  uGhostOn: { value: 0 },
 };
 
 /** Scene-frame unit vector towards the Sun from its sub-solar point (scene = MOON_ME(Y, Z, X)). */

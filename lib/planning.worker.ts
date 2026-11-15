@@ -16,6 +16,7 @@ import {
 } from "./sky";
 
 const HALF = 304; // km
+const CAP_KM = 2 * R * Math.tan(5 * RAD); // stereographic radius of 80°S
 interface Init {
   type: "init";
   base: string;
@@ -46,6 +47,8 @@ let eph: Float32Array;
 let coarse: Float32Array; // metres, 950² block-centred 640 m
 let query: Uint8Array; // [cell][slope, psr]
 let cellSin: Float64Array, cellCos: Float64Array, cellLon: Float64Array;
+let cellSlope: Float32Array; // mean LDSM slope (deg) of each overview cell, from the 640 m query grid
+let cellInCap: Uint8Array;
 let ready: Promise<void> | null = null;
 
 /* ---------------------------------------------------------------- loading */
@@ -80,6 +83,24 @@ async function init(c: Init) {
       cellSin[i] = Math.sin(lat * RAD);
       cellCos[i] = Math.cos(lat * RAD);
       cellLon[i] = lon * RAD;
+    }
+  // slope per overview cell = mean of the query-grid nodes it covers (query grid is coarseN², interleaved [slope, psr])
+  cellSlope = new Float32Array(n * n);
+  cellInCap = new Uint8Array(n * n);
+  const f = c.coarseN / n; // 2
+  for (let r = 0; r < n; r++)
+    for (let k = 0; k < n; k++) {
+      let sum = 0, cnt = 0;
+      for (let dr = 0; dr < f; dr++)
+        for (let dc = 0; dc < f; dc++) {
+          const qr = Math.min(c.coarseN - 1, Math.floor(r * f) + dr), qc = Math.min(c.coarseN - 1, Math.floor(k * f) + dc);
+          sum += query[(qr * c.coarseN + qc) * 2] / (255 / 90);
+          cnt++;
+        }
+      const i = r * n + k;
+      cellSlope[i] = sum / cnt;
+      const x = -HALF + (k + 0.5) * cell, y = HALF - (r + 0.5) * cell;
+      cellInCap[i] = Math.hypot(x, y) <= CAP_KM - 2 ? 1 : 0;
     }
 }
 
@@ -319,6 +340,8 @@ async function analyseEllipse(e: EllipseSpec, landingMs: number, hours: number, 
 
   // slope from the 80 m DEM (central differences, 160 m baseline) and PSR from the 640 m grid
   let slopeSum = 0, slopeMax = 0, psrSum = 0;
+  const slopeHist = new Uint32Array(46); // 1° bins, last bin = 45°+
+  let elevMin = Infinity, elevMax = -Infinity;
   const qn = cfg.coarseN, qcell = (2 * HALF) / qn;
   for (let i = 0; i < count; i++) {
     const x = cells[i * 4], y = cells[i * 4 + 1];
@@ -328,6 +351,11 @@ async function analyseEllipse(e: EllipseSpec, landingMs: number, hours: number, 
     if (Number.isFinite(s)) {
       slopeSum += s;
       if (s > slopeMax) slopeMax = s;
+      slopeHist[Math.min(45, Math.floor(s))]++;
+    }
+    if (Number.isFinite(ground[i])) {
+      if (ground[i] < elevMin) elevMin = ground[i];
+      if (ground[i] > elevMax) elevMax = ground[i];
     }
     const qc = Math.min(qn - 1, Math.max(0, Math.round((x + HALF) / qcell - 0.5)));
     const qr = Math.min(qn - 1, Math.max(0, Math.round((HALF - y) / qcell - 0.5)));
@@ -338,7 +366,7 @@ async function analyseEllipse(e: EllipseSpec, landingMs: number, hours: number, 
   const sunSum = new Float32Array(count), earthSum = new Float32Array(count);
   const run = new Uint16Array(count), longest = new Uint16Array(count);
   const series = new Float32Array(hours * 6); // centre: sunEl, sunHz, sunAz, earthEl, earthHz, earthAz
-  let bothHours = 0, landingLit = 0, landingEarth = 0;
+  let bothHours = 0, landingLit = 0, landingEarth = 0, usableCellHours = 0;
   for (let t = 0; t < hours; t++) {
     const s = sub(landingMs + t * 3600e3);
     for (let i = 0; i < count; i++) {
@@ -353,6 +381,7 @@ async function analyseEllipse(e: EllipseSpec, landingMs: number, hours: number, 
       const ep = skyPosition(lat, lon, s.earthLat, s.earthLon);
       const ev = earthTopocentric(ep.el, s.dist) > horizonAt(hz, off, HORIZON_DIRS, ep.az, false);
       if (ev) earthSum[i]++;
+      if (ev && fr > 0) usableCellHours++; // Sun AND Earth both visible
       if (t === 0) {
         landingLit += fr;
         if (ev) landingEarth++;
@@ -420,8 +449,12 @@ async function analyseEllipse(e: EllipseSpec, landingMs: number, hours: number, 
         return best;
       })(),
       bothPctCentre: (bothHours / hours) * 100,
+      usablePct: (usableCellHours / (count * hours)) * 100,
     },
-    terrain: { slopeMeanDeg: slopeSum / count, slopeMaxDeg: slopeMax, psrPct: (psrSum / count) * 100 },
+    terrain: {
+      slopeMeanDeg: slopeSum / count, slopeMaxDeg: slopeMax, psrPct: (psrSum / count) * 100,
+      slopeHist, elevMinM: elevMin, elevMaxM: elevMax,
+    },
   };
 }
 
@@ -441,6 +474,159 @@ function ellipseHour(ms: number) {
     out[j * 4 + 3] = 255;
   }
   return { data: out, x0: grid.x0, y1: grid.y0, cellKm: grid.stride, w: grid.w, h: grid.h };
+}
+
+/* ---------------------------------------------------------------- searches (overview grid, same Sun/Earth rules) */
+/** Is the Sun (any part of the disc) AND Earth visible from overview cell i for these sub-points? Also returns parts. */
+function cellUsable(i: number, ss: number, sc: number, sl: number, es: number, ec: number, el: number, dist: number): number {
+  const [sEl, sAz] = cellSky(i, ss, sc, sl);
+  const sun = sunFraction(sEl, horizonAt(horizon, i * HORIZON_DIRS, HORIZON_DIRS, sAz)) > 0;
+  const [eEl0, eAz] = cellSky(i, es, ec, el);
+  const earth = earthTopocentric(eEl0, dist) > horizonAt(horizon, i * HORIZON_DIRS, HORIZON_DIRS, eAz);
+  return (sun ? 1 : 0) | (earth ? 2 : 0);
+}
+
+function cellLatLon(i: number) {
+  const n = cfg.n, cell = (2 * HALF) / n;
+  const r = Math.floor(i / n), k = i % n;
+  return mapToLatLon(-HALF + (k + 0.5) * cell, HALF - (r + 0.5) * cell);
+}
+
+function cellXY(i: number): [number, number] {
+  const n = cfg.n, cell = (2 * HALF) / n;
+  return [-HALF + ((i % n) + 0.5) * cell, HALF - (Math.floor(i / n) + 0.5) * cell];
+}
+
+/** In-cap overview cells whose centres lie within rKm of map point (x, y) (always at least the nearest cell). */
+function cellsWithin(x: number, y: number, rKm: number): number[] {
+  const n = cfg.n, cell = (2 * HALF) / n;
+  const c0 = Math.floor((x + HALF) / cell), r0 = Math.floor((HALF - y) / cell);
+  const span = Math.ceil(rKm / cell) + 1;
+  const out: number[] = [];
+  let nearest = -1, nd = Infinity;
+  for (let r = Math.max(0, r0 - span); r <= Math.min(n - 1, r0 + span); r++)
+    for (let k = Math.max(0, c0 - span); k <= Math.min(n - 1, c0 + span); k++) {
+      const i = r * n + k;
+      if (!cellInCap[i]) continue;
+      const [cx, cy] = cellXY(i);
+      const d = Math.hypot(cx - x, cy - y);
+      if (d <= rKm) out.push(i);
+      if (d < nd) { nd = d; nearest = i; }
+    }
+  if (!out.length && nearest >= 0) out.push(nearest);
+  return out;
+}
+
+/**
+ * Best ellipse centre within radiusKm of (cx, cy) for a fixed mission window. Each candidate is scored by the
+ * AVERAGE over its footprint (cells within footKm, ≈ the ellipse), so the estimate matches what the 80 m
+ * ellipse analysis measures. Candidates whose footprint mean slope exceeds slopeMaxDeg are skipped.
+ */
+function searchNearby(cx: number, cy: number, radiusKm: number, footKm: number, startMs: number, hours: number, slopeMaxDeg: number, id: number) {
+  const area = cellsWithin(cx, cy, radiusKm + footKm);
+  const slot = new Int32Array(cfg.n * cfg.n).fill(-1);
+  area.forEach((c, j) => (slot[c] = j));
+  const step = Math.max(1, Math.ceil(hours / 240));
+  const usable = new Uint16Array(area.length), sun = new Uint16Array(area.length), earth = new Uint16Array(area.length);
+  let samples = 0;
+  for (let h = 0; h < hours; h += step, samples++) {
+    const s = sub(startMs + h * 3600e3);
+    const ss = Math.sin(s.sunLat * RAD), sc = Math.cos(s.sunLat * RAD), sl = s.sunLon * RAD;
+    const es = Math.sin(s.earthLat * RAD), ec = Math.cos(s.earthLat * RAD), el = s.earthLon * RAD;
+    for (let j = 0; j < area.length; j++) {
+      const v = cellUsable(area[j], ss, sc, sl, es, ec, el, s.dist);
+      if (v & 1) sun[j]++;
+      if (v & 2) earth[j]++;
+      if (v === 3) usable[j]++;
+    }
+    if (samples % 20 === 0) ctx.postMessage({ type: "progress", id, value: h / hours });
+  }
+  let best: { i: number; u: number; s: number; e: number; slope: number } | null = null;
+  for (const i of area) {
+    const [x, y] = cellXY(i);
+    if (Math.hypot(x - cx, y - cy) > radiusKm) continue;
+    const foot = cellsWithin(x, y, footKm);
+    let u = 0, su = 0, ea = 0, sl = 0, k = 0;
+    for (const f of foot) {
+      const j = slot[f];
+      if (j < 0) continue;
+      u += usable[j]; su += sun[j]; ea += earth[j]; sl += cellSlope[f]; k++;
+    }
+    if (!k || sl / k > slopeMaxDeg) continue;
+    const cand = { i, u: u / k, s: su / k, e: ea / k, slope: sl / k };
+    if (!best || cand.u > best.u || (cand.u === best.u && cand.s + cand.e > best.s + best.e)) best = cand;
+  }
+  if (!best) return null;
+  const ll = cellLatLon(best.i);
+  return {
+    lat: ll.lat, lon: ll.lon, usablePct: (best.u / samples) * 100, sunlitPct: (best.s / samples) * 100,
+    earthPct: (best.e / samples) * 100, slopeDeg: best.slope, cellsSearched: area.length,
+  };
+}
+
+/**
+ * Best ellipse centre and landing time over a date range for the whole region.
+ * Stage 1: per-cell sliding mission window (samples every 3 h, landing times every 6 h), keeping each cell's best start.
+ * Stage 2: the 60 best cells are re-scored by the footprint average (≈ the ellipse) at their best start.
+ */
+function searchGlobal(rangeStartMs: number, rangeEndMs: number, missionHours: number, footKm: number, slopeMaxDeg: number, id: number) {
+  const SAMPLE_H = 3, START_EVERY = 2;
+  const cand: number[] = [];
+  for (let i = 0; i < cfg.n * cfg.n; i++) if (cellInCap[i] && cellSlope[i] <= slopeMaxDeg) cand.push(i);
+  const W = Math.max(1, Math.round(missionHours / SAMPLE_H));
+  const total = Math.floor((rangeEndMs - rangeStartMs) / (SAMPLE_H * 3600e3)) + W;
+  const ring = new Uint8Array(cand.length * W);
+  const sum = new Uint16Array(cand.length);
+  const bestVal = new Int32Array(cand.length).fill(-1);
+  const bestStart = new Int32Array(cand.length);
+  const tsun = (i: number, s: ReturnType<typeof sub>, ss: number, sc: number, sl: number, es: number, ec: number, el: number) => {
+    const [sEl, sAz] = cellSky(i, ss, sc, sl);
+    if (sunFraction(sEl, horizonAt(horizon, i * HORIZON_DIRS, HORIZON_DIRS, sAz)) <= 0) return 0;
+    const [eEl0, eAz] = cellSky(i, es, ec, el);
+    return earthTopocentric(eEl0, s.dist) > horizonAt(horizon, i * HORIZON_DIRS, HORIZON_DIRS, eAz) ? 1 : 0;
+  };
+  for (let t = 0; t < total; t++) {
+    const s = sub(rangeStartMs + t * SAMPLE_H * 3600e3);
+    const ss = Math.sin(s.sunLat * RAD), sc = Math.cos(s.sunLat * RAD), sl = s.sunLon * RAD;
+    const es = Math.sin(s.earthLat * RAD), ec = Math.cos(s.earthLat * RAD), el = s.earthLon * RAD;
+    const slot = t % W;
+    const startIdx = t - W + 1;
+    const evaluate = startIdx >= 0 && startIdx % START_EVERY === 0;
+    for (let j = 0; j < cand.length; j++) {
+      const b = tsun(cand[j], s, ss, sc, sl, es, ec, el);
+      const o = j * W + slot;
+      sum[j] += b - ring[o];
+      ring[o] = b;
+      if (evaluate && sum[j] > bestVal[j]) { bestVal[j] = sum[j]; bestStart[j] = startIdx; }
+    }
+    if (t % 8 === 0) ctx.postMessage({ type: "progress", id, value: 0.9 * (t / total) });
+  }
+  // stage 2: footprint re-scoring of the top cells
+  const order = Array.from(cand.keys()).sort((a, b) => bestVal[b] - bestVal[a]).slice(0, 60);
+  let best: { i: number; start: number; u: number; slope: number } | null = null;
+  order.forEach((j, q) => {
+    const [x, y] = cellXY(cand[j]);
+    const foot = cellsWithin(x, y, footKm);
+    const slope = foot.reduce((a, f) => a + cellSlope[f], 0) / foot.length;
+    if (slope > slopeMaxDeg) return;
+    let u = 0;
+    for (let w = 0; w < W; w++) {
+      const s = sub(rangeStartMs + (bestStart[j] + w) * SAMPLE_H * 3600e3);
+      const ss = Math.sin(s.sunLat * RAD), sc = Math.cos(s.sunLat * RAD), sl = s.sunLon * RAD;
+      const es = Math.sin(s.earthLat * RAD), ec = Math.cos(s.earthLat * RAD), el = s.earthLon * RAD;
+      for (const f of foot) u += tsun(f, s, ss, sc, sl, es, ec, el);
+    }
+    u /= foot.length * W;
+    if (!best || u > best.u) best = { i: cand[j], start: bestStart[j], u, slope };
+    if (q % 10 === 0) ctx.postMessage({ type: "progress", id, value: 0.9 + 0.1 * (q / order.length) });
+  });
+  if (!best) return null;
+  const b = best as { i: number; start: number; u: number; slope: number };
+  const ll = cellLatLon(b.i);
+  return {
+    lat: ll.lat, lon: ll.lon, landingMs: rangeStartMs + b.start * SAMPLE_H * 3600e3, usablePct: b.u * 100,
+    slopeDeg: b.slope, cellsSearched: cand.length, timesTested: Math.ceil((total - W + 1) / START_EVERY),
+  };
 }
 
 /* ---------------------------------------------------------------- messages */
@@ -463,6 +649,10 @@ ctx.onmessage = async (ev: MessageEvent) => {
     } else if (m.type === "ellipse") {
       const result = await analyseEllipse(m.ellipse, m.landingMs, m.hours, m.id);
       ctx.postMessage({ type: "ellipse", id: m.id, result });
+    } else if (m.type === "search-nearby") {
+      ctx.postMessage({ type: "search-nearby", id: m.id, result: searchNearby(m.cx, m.cy, m.radiusKm, m.footKm, m.startMs, m.hours, m.slopeMaxDeg, m.id) });
+    } else if (m.type === "search-global") {
+      ctx.postMessage({ type: "search-global", id: m.id, result: searchGlobal(m.rangeStartMs, m.rangeEndMs, m.missionHours, m.footKm, m.slopeMaxDeg, m.id) });
     } else if (m.type === "ellipse-hour") {
       const r = ellipseHour(m.ms);
       if (r) ctx.postMessage({ type: "ellipse-hour", id: m.id, ...r }, [r.data.buffer]);

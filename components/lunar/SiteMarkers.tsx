@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { MOON_RADIUS_KM as R } from "@/lib/lunar-config";
-import { latLonToDir } from "@/lib/lunar-coordinates";
+import { latLonToDir, surfaceDistanceKm } from "@/lib/lunar-coordinates";
 import { SITE_LABELS } from "@/lib/sites";
 import { sharedUniforms } from "@/lib/shaders";
 import { frameState } from "@/lib/frame-state";
@@ -23,32 +23,52 @@ const ray = new THREE.Ray();
 const sphere = new THREE.Sphere(new THREE.Vector3(), R * 0.998);
 const hit = new THREE.Vector3();
 
+// Draw order = priority when labels collide: Artemis regions, then larger features.
+const PRIORITY = [...SITE_LABELS].sort((p, q) => (q.artemis.length ? 1000 : 0) + (q.diameterKm ?? 0) - ((p.artemis.length ? 1000 : 0) + (p.diameterKm ?? 0)));
+const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
+const sizes = new Map<string, { w: number; h: number }>();
+const NEAR_ELLIPSE_KM = 30;
+
 export function SiteMarkers() {
   useFrame(({ camera, size }) => {
     const show = Math.min(1, Math.max(0, (frameState.poleFocus - 0.3) / 0.3));
     const exag = sharedUniforms.uExag.value;
-    for (const s of SITE_LABELS) {
+    const ell = store.get().ellipse;
+    placed.length = 0;
+    for (const s of PRIORITY) {
       const el = els.get(s.key);
       if (!el) continue;
-      if (show < 0.02) {
-        el.style.visibility = "hidden";
-        continue;
+      const hide = () => (el.style.visibility = "hidden");
+      if (show < 0.02) { hide(); continue; }
+      // once an ellipse exists, only labels within ~30 km of it
+      if (ell) {
+        const d = surfaceDistanceKm({ lat: s.lat, lon: s.lon }, { lat: ell.lat, lon: ell.lon });
+        if (d > NEAR_ELLIPSE_KM + ell.aKm) { hide(); continue; }
       }
       latLonToDir(s.lat, s.lon, dir);
       const h = ((sampleHeightM(s.lat, s.lon) ?? 0) / 1000) * exag;
       v.set(dir[0], dir[1], dir[2]).multiplyScalar(R + h + 0.4);
-      // occlusion by the lunar sphere
       ray.origin.copy(camera.position);
       ray.direction.copy(v).sub(camera.position);
       const len = ray.direction.length();
       ray.direction.divideScalar(len);
       const hidden = ray.intersectSphere(sphere, hit) !== null && hit.distanceTo(camera.position) < len - 2;
       v.project(camera);
-      const on = !hidden && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
-      el.style.visibility = on ? "visible" : "hidden";
-      if (!on) continue;
+      if (hidden || v.z >= 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) { hide(); continue; }
+      const x = ((v.x + 1) / 2) * size.width, y = ((1 - v.y) / 2) * size.height;
+      // collision detection against labels already placed (label box extends right of the dot)
+      let sz = sizes.get(s.key);
+      if (!sz || sz.w === 0) {
+        const b = (el.firstElementChild as HTMLElement | null)?.getBoundingClientRect();
+        sz = { w: b?.width || s.name.length * 6.5 + 30, h: b?.height || 16 };
+        if (b && b.width) sizes.set(s.key, sz);
+      }
+      const box = { x0: x - 6, y0: y - sz.h / 2 - 2, x1: x - 6 + sz.w + 4, y1: y + sz.h / 2 + 2 };
+      if (placed.some((p) => box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0)) { hide(); continue; }
+      placed.push(box);
+      el.style.visibility = "visible";
       el.style.opacity = show.toFixed(2);
-      el.style.transform = `translate3d(${(((v.x + 1) / 2) * size.width).toFixed(1)}px, ${(((1 - v.y) / 2) * size.height).toFixed(1)}px, 0)`;
+      el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
     }
   });
   return null;

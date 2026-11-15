@@ -25,8 +25,14 @@ export interface EllipseResult {
   mission: {
     sunlitPct: number; sunlitMinPct: number; sunlitMaxPct: number; earthPct: number;
     longestNightH: number; centreLongestNightH: number; bothPctCentre: number;
+    /** Share of cell-hours with the Sun AND Earth both visible, whole ellipse. */
+    usablePct: number;
   };
-  terrain: { slopeMeanDeg: number; slopeMaxDeg: number; psrPct: number };
+  terrain: {
+    slopeMeanDeg: number; slopeMaxDeg: number; psrPct: number;
+    /** 1° bins (last = 45°+) of the 80 m slope inside the ellipse. */
+    slopeHist: Uint32Array; elevMinM: number; elevMaxM: number;
+  };
 }
 
 export interface FineMask {
@@ -115,4 +121,25 @@ export async function ellipseAt(ms: number): Promise<FineMask | null> {
   if (!worker) return null;
   const r = await call<FineMask & { type: string }>({ type: "ellipse-hour", ms });
   return r.type === "ellipse-hour" ? r : null;
+}
+
+export interface NearbyResult {
+  lat: number; lon: number; usablePct: number; sunlitPct: number; earthPct: number; slopeDeg: number; cellsSearched: number;
+}
+export interface GlobalResult {
+  lat: number; lon: number; landingMs: number; usablePct: number; slopeDeg: number; cellsSearched: number; timesTested: number;
+}
+
+/** Best 1.28 km cell within radiusKm of a map point for a fixed mission window (approximate; re-analyse at 80 m). */
+export async function searchNearby(
+  cx: number, cy: number, radiusKm: number, footKm: number, startMs: number, hours: number, slopeMaxDeg: number, progress?: Pending["progress"],
+) {
+  await planningReady();
+  return (await call<{ result: NearbyResult | null }>({ type: "search-nearby", cx, cy, radiusKm, footKm, startMs, hours, slopeMaxDeg }, progress)).result;
+}
+
+/** Best cell and landing time over a date range for the whole 80–90°S region (approximate; re-analyse at 80 m). */
+export async function searchGlobal(rangeStartMs: number, rangeEndMs: number, missionHours: number, footKm: number, slopeMaxDeg: number, progress?: Pending["progress"]) {
+  await planningReady();
+  return (await call<{ result: GlobalResult | null }>({ type: "search-global", rangeStartMs, rangeEndMs, missionHours, footKm, slopeMaxDeg }, progress)).result;
 }

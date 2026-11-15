@@ -15,6 +15,7 @@ import TerrainLayers from "./TerrainLayers";
 import Starfield from "./Starfield";
 import PlanOverlay from "./PlanOverlay";
 import { SiteMarkers } from "./SiteMarkers";
+import PinMarker from "./PinMarker";
 
 function DataLoader() {
   useLunarDataLoader();
@@ -43,6 +44,7 @@ export default function MoonScene() {
       <TerrainLayers />
       <PlanOverlay />
       <SiteMarkers />
+      <PinMarker />
       <CameraController />
     </Canvas>
   );

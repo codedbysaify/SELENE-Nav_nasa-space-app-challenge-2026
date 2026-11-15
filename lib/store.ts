@@ -7,6 +7,20 @@
 import { useSyncExternalStore } from "react";
 import { EXAGGERATION_DEFAULT, type BaseLayer } from "./lunar-config";
 import type { EllipseResult, EllipseSpec } from "./planning";
+import { defaultThresholds, type Thresholds } from "./verdict";
+import type { SavedPlan } from "./plans";
+
+/** A proposed ellipse (ghost) from "Find a better spot nearby" or "Suggest best plan". */
+export interface Suggestion {
+  kind: "nearby" | "global";
+  ellipse: EllipseSpec;
+  /** Landing time proposed by the global search (null = keep the current date). */
+  landingMs: number | null;
+  missionDays: number | null;
+  usablePct: number;
+  areaKm2: number;
+  note: string;
+}
 
 export type PlanStep = "date" | "draw" | "results";
 export type AnalysisLayer =
@@ -64,6 +78,13 @@ export interface AppState {
   analysisProgress: { value: number; label: string } | null;
   missionLayersReady: boolean;
   analysisError: string | null;
+  /* ---- verdict, saved plans, suggestions */
+  thresholds: Thresholds;
+  plans: SavedPlan[];
+  plansOpen: boolean;
+  suggestOpen: boolean;
+  suggestion: Suggestion | null;
+  searchProgress: { value: number; label: string } | null;
   viewMode: ViewMode;
   /** 0 = global, 1 = fully pole-focused (from camera distance). */
   poleFocus: number;
@@ -71,6 +92,10 @@ export interface AppState {
   distanceToPoleKm: number;
   focus: PointReadout | null;
   cursor: PointReadout | null;
+  /** Point locked by double-click, the Pin button or the P key (unpin: ✕ / Esc). */
+  pinned: PointReadout | null;
+  /** Pin button armed: the next clean click on the Moon pins that point. */
+  pinMode: boolean;
   load: LoadState;
   cameraApi: CameraApi | null;
   aboutOpen: boolean;
@@ -93,12 +118,20 @@ const initial: AppState = {
   analysisProgress: null,
   missionLayersReady: false,
   analysisError: null,
+  thresholds: defaultThresholds(),
+  plans: [],
+  plansOpen: false,
+  suggestOpen: false,
+  suggestion: null,
+  searchProgress: null,
   viewMode: "global",
   poleFocus: 0,
   altitudeKm: 0,
   distanceToPoleKm: 0,
   focus: null,
   cursor: null,
+  pinned: null,
+  pinMode: false,
   load: { globe: "idle", terrainLow: "idle", terrainHigh: "idle", message: null },
   cameraApi: null,
   aboutOpen: false,

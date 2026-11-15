@@ -1,10 +1,11 @@
 "use client";
 /**
- * Feeds the Sun/Earth analysis into the terrain shader:
- *  • overview map (1.28 km cells) for the selected time, from the worker
- *  • 80 m result inside the landing ellipse for the selected time
- *  • mission-window and annual statistics maps
- *  • the landing-ellipse outline
+ * Feeds the planning state into the terrain shader:
+ *  • landing-ellipse outline and the suggested ("ghost") ellipse
+ *  • focus mode after an analysis (layers only inside the ellipse, outside dimmed;
+ *    elevation colours stretched to the ellipse's own range)
+ *  • time-dependent Sun / Earth result INSIDE the ellipse only (80 m, follows the slider)
+ *  • optional whole-region statistics maps (mission window, year 2027) — never time-dependent
  * Requests are "latest wins": while the worker is busy only the newest time is queued.
  */
 import { useEffect, useMemo } from "react";
@@ -13,9 +14,11 @@ import * as THREE from "three";
 import { DATA_BASE } from "@/lib/lunar-config";
 import { sharedUniforms } from "@/lib/shaders";
 import { store, type AnalysisLayer } from "@/lib/store";
-import { ellipseAt, overviewAt, planningReady } from "@/lib/planning";
+import { ellipseAt } from "@/lib/planning";
+import type { EllipseSpec } from "@/lib/planning";
 import { planData } from "@/lib/planner-actions";
 import { RAD, latLonToMap } from "@/lib/sky";
+import { lunarData } from "@/hooks/useLunarData";
 
 const N = 475;
 const MODE: Record<AnalysisLayer, number> = {
@@ -32,8 +35,17 @@ function dataTex(w: number, h: number, data?: Uint8Array) {
   return t;
 }
 
+/** Ellipse → shader encoding: centre (map km) + unit vector of the major axis in the map plane. */
+function setEllipseUniform(e: EllipseSpec, u: THREE.Vector4, ab: THREE.Vector2) {
+  const c = latLonToMap(e.lat, e.lon);
+  const lon = Math.hypot(c.x, c.y) < 1e-9 ? 0 : Math.atan2(c.x, c.y);
+  const h = e.headingDeg * RAD;
+  u.set(c.x, c.y, Math.sin(lon) * Math.cos(h) + Math.cos(lon) * Math.sin(h), Math.cos(lon) * Math.cos(h) - Math.sin(lon) * Math.sin(h));
+  ab.set(Math.max(0.05, e.aKm), Math.max(0.05, e.bKm));
+}
+
 export default function PlanOverlay() {
-  const nowTex = useMemo(() => dataTex(N, N), []);
+  const blankTex = useMemo(() => dataTex(1, 1), []);
   const missionTex = useMemo(() => dataTex(N, N), []);
   const annualTex = useMemo(() => {
     const t = new THREE.TextureLoader().load(`${DATA_BASE}/annual-2027.webp`);
@@ -45,27 +57,22 @@ export default function PlanOverlay() {
   }, []);
 
   useEffect(() => {
-    sharedUniforms.uPlanTex.value = nowTex;
-    sharedUniforms.uFineTex.value = dataTex(1, 1);
+    sharedUniforms.uPlanTex.value = blankTex;
+    sharedUniforms.uFineTex.value = blankTex;
     let busy = false;
     let queued: number | null = null;
     let lastKey = "";
     let fineTex: THREE.DataTexture | null = null;
     let missionVersion = -1;
 
-    const refreshNow = async (ms: number) => {
+    const refreshFine = async (ms: number) => {
       if (busy) {
         queued = ms;
         return;
       }
       busy = true;
       try {
-        await planningReady();
-        const data = await overviewAt(ms);
-        (nowTex.image.data as Uint8Array).set(data);
-        nowTex.needsUpdate = true;
-        const s = store.get();
-        const fine = s.analysis ? await ellipseAt(ms) : null;
+        const fine = store.get().analysis ? await ellipseAt(ms) : null;
         if (fine) {
           if (!fineTex || fineTex.image.width !== fine.w || fineTex.image.height !== fine.h) {
             fineTex?.dispose();
@@ -86,7 +93,7 @@ export default function PlanOverlay() {
         if (queued !== null) {
           const q = queued;
           queued = null;
-          void refreshNow(q);
+          void refreshFine(q);
         }
       }
     };
@@ -94,17 +101,22 @@ export default function PlanOverlay() {
     const sync = () => {
       const s = store.get();
       const layer = s.analysisLayer;
-      // ellipse uniforms
       if (s.ellipse) {
-        const c = latLonToMap(s.ellipse.lat, s.ellipse.lon);
-        const lon = Math.hypot(c.x, c.y) < 1e-9 ? 0 : Math.atan2(c.x, c.y);
-        const h = s.ellipse.headingDeg * RAD;
-        const ux = Math.sin(lon) * Math.cos(h) + Math.cos(lon) * Math.sin(h);
-        const uy = Math.cos(lon) * Math.cos(h) - Math.sin(lon) * Math.sin(h);
-        sharedUniforms.uEllipse.value.set(c.x, c.y, ux, uy);
-        sharedUniforms.uEllipseAB.value.set(Math.max(0.05, s.ellipse.aKm), Math.max(0.05, s.ellipse.bKm));
+        setEllipseUniform(s.ellipse, sharedUniforms.uEllipse.value, sharedUniforms.uEllipseAB.value);
         sharedUniforms.uEllipseOn.value = 1;
       } else sharedUniforms.uEllipseOn.value = 0;
+
+      if (s.suggestion) {
+        setEllipseUniform(s.suggestion.ellipse, sharedUniforms.uGhost.value, sharedUniforms.uGhostAB.value);
+        sharedUniforms.uGhostOn.value = 1;
+      } else sharedUniforms.uGhostOn.value = 0;
+
+      // elevation range of the analysed ellipse, in the science texture's 0–1 encoding
+      const el = lunarData.meta?.elevation;
+      if (s.analysis && el) {
+        const span = el.max_m - el.min_m;
+        sharedUniforms.uElevLocal.value.set((s.analysis.terrain.elevMinM - el.min_m) / span, (s.analysis.terrain.elevMaxM - el.min_m) / span);
+      }
 
       sharedUniforms.uPlanMode.value = MODE[layer];
       if (layer.startsWith("annual")) sharedUniforms.uPlanTex.value = annualTex;
@@ -115,16 +127,17 @@ export default function PlanOverlay() {
           missionVersion = planData.missionVersion;
         }
         sharedUniforms.uPlanTex.value = missionTex;
-      } else sharedUniforms.uPlanTex.value = nowTex;
-      if (!layer.startsWith("now")) sharedUniforms.uFineOn.value = 0;
+      }
 
-      if (layer.startsWith("now")) {
-        const ms = s.timeMs ?? Math.floor(Date.now() / 3600e3) * 3600e3;
-        const key = `${ms}|${s.analysis ? s.analysis.count : 0}`;
+      if (layer.startsWith("now") && s.analysis && s.timeMs !== null) {
+        const key = `${s.timeMs}|${s.analysis.count}|${s.analysis.centre.lat}|${s.analysis.centre.lon}`;
         if (key !== lastKey) {
           lastKey = key;
-          void refreshNow(ms);
+          void refreshFine(s.timeMs);
         }
+      } else if (!s.analysis) {
+        sharedUniforms.uFineOn.value = 0;
+        lastKey = "";
       }
     };
     sync();
@@ -133,12 +146,16 @@ export default function PlanOverlay() {
       unsub();
       fineTex?.dispose();
     };
-  }, [nowTex, missionTex, annualTex]);
+  }, [blankTex, missionTex, annualTex]);
 
   useFrame((_, dt) => {
-    const target = store.get().analysisLayer === "none" ? 0 : 1;
+    const s = store.get();
+    const k = 1 - Math.exp(-Math.min(dt, 0.1) * 8);
     const u = sharedUniforms.uPlanOpacity;
-    u.value += (target - u.value) * (1 - Math.exp(-Math.min(dt, 0.1) * 8));
+    u.value += ((s.analysisLayer === "none" ? 0 : 1) - u.value) * k;
+    // focus mode: once an ellipse is analysed, layers apply only inside it
+    const f = sharedUniforms.uFocus;
+    f.value += ((s.analysis && s.planStep === "results" ? 1 : 0) - f.value) * k;
   });
 
   return null;

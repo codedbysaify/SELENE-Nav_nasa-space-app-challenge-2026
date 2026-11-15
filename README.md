@@ -24,6 +24,39 @@ A time slider animates live shadow and Earth-visibility maps on the 3D terrain.
 All Sun/Earth data is precomputed offline from NASA/JPL ephemerides; the browser
 never calls JPL Horizons.
 
+**v3: decision support.**
+* **Site verdict.** After an analysis the planner shows ✅ Good, ⚠️ Risky or ❌ Not
+  recommended. The verdict is the worst of ☀️ Power (sunlit %), 📡 Contact (Earth
+  visible %) and ⛰️ Terrain (mean slope), plus 🌙 Longest darkness if you switch
+  it on.
+  * Each row shows the threshold it was judged against.
+  * A plain-English sentence explains why the site got its rating.
+  * Four key numbers follow: Sunlit, Longest darkness, Earth visible, and Usable
+    time (Sun and Earth both visible).
+* **⚙️ Verdict settings.** Dual sliders and number inputs with Default, Strict,
+  Relaxed and Custom presets. Settings are saved in the browser and included in
+  share links. They change the rating, never the measured numbers.
+* **Ellipse focus.** After analysis, layers apply only inside the ellipse; outside
+  is dimmed hillshade. Elevation colours stretch to the ellipse's own height
+  range. The time slider changes only the ellipse's Sun/Earth view, never the
+  verdict.
+* **🔍 Better spot nearby.** Searches within 20 km. Each candidate is scored by the
+  average over an ellipse-sized footprint, on safe slopes, under the current
+  settings.
+* **✨ Suggest best plan.** Searches the whole 80–90°S region over a date range of
+  up to 90 days, with landing times every 6 h; it took about 40 s in testing.
+  Both searches show a dashed ghost ellipse with its area in km², and accepting
+  it runs the exact 80 m analysis.
+* **📋 Plans drawer.** Save up to 10 plans, kept in the browser. Compare them
+  ranked by verdict, then usable time, or click any column to sort. Best and
+  worst are marked.
+* **🔗 Share.** The link carries the current plan or all saved plans, plus your
+  verdict settings.
+* **Readability.** Custom 24-hour UTC date picker with a Save button. Every field
+  has an (i) definition that opens on hover or click. Status-bar pinning shows a
+  marker on the Moon. Longitude reads "— (pole)" at 90°S. Slope readings carry a
+  verdict (✅ safe, ⚠️ caution, ❌ too steep).
+
 ---
 
 ## Quick start

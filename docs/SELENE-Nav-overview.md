@@ -219,7 +219,26 @@ what makes the live time slider possible with small files.
 
 ---
 
-## 4. Data sources (credited in the app footer)
+## 4. Version 3 (decision support)
+
+v3 makes the results easier to act on. See `docs/V3-PLAN.md` for the full spec.
+The calculations are unchanged; the new outputs reuse the same Sun, Earth and
+horizon functions:
+* **Site verdict:** the worst of Power, Contact and Terrain, with an optional
+  Darkness criterion. Thresholds are adjustable, with presets.
+* **Key numbers:** sunlit %, longest darkness, Earth visible %, and usable time %
+  (Sun AND Earth visible). Everything else sits in collapsed "Show details"
+  sections.
+* **Ellipse focus:** after analysis, all layers apply inside the ellipse only. The
+  time slider never changes the verdict.
+* **Better spot nearby (20 km) and Suggest best plan (whole region, ≤ 90 days).**
+  Both score candidates by the average over an ellipse-sized footprint on the
+  1.28 km horizon grid. In tests this matched the exact 80 m result within about
+  1 percentage point.
+* **Saved plans:** up to 10, kept in localStorage, compared in a slide-out drawer.
+* **Share links:** current plan or all plans, plus thresholds.
+
+## 5. Data sources (credited in the app footer)
 - NASA LOLA South Pole products, PGDA product 90 — Barker et al. (2023),
   PSJ 4:183, doi:10.3847/PSJ/acf3e1; data doi:10.60903/gsfcpgda-lola-spole
 - NASA SVS Moon Phase and Libration (`mooninfo`) — svs.gsfc.nasa.gov
@@ -228,7 +247,7 @@ what makes the live time slider possible with small files.
   verification
 - IAU Gazetteer of Planetary Nomenclature (feature names and coordinates)
 
-## 5. Known limitations
+## 6. Known limitations
 - Whole-region maps use 1.2 km cells; the exact 80 m analysis is inside the
   drawn ellipse.
 - The ellipse uses 80 m terrain nearby and coarser terrain far away for the

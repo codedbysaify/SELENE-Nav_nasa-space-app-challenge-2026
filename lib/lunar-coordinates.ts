@@ -66,6 +66,11 @@ export function formatLat(lat: number, digits = 3): string {
   return `${Math.abs(lat).toFixed(digits)}°${lat < 0 ? "S" : "N"}`;
 }
 
+/** Longitude for display; at (or within 0.0005° of) a pole every meridian meets, so it has no meaning. */
+export function formatLonAt(lat: number, lon: number, digits = 3): string {
+  return Math.abs(lat) > 89.9995 ? "— (pole)" : formatLon(lon, digits);
+}
+
 export function formatLon(lon: number, digits = 3): string {
   const l = ((((lon + 180) % 360) + 360) % 360) - 180;
   return `${Math.abs(l).toFixed(digits)}°${l < 0 ? "W" : "E"}`;

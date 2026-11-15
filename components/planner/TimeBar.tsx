@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { store, useAppStore } from "@/lib/store";
 import { EARTH_COLOR, SUN_COLOR } from "@/lib/shaders";
 import { fmtUtc } from "./PlannerPanel";
+import InfoTip from "@/components/ui/InfoTip";
 
 const SPEEDS = [1, 3, 6, 12];
 
@@ -36,7 +37,7 @@ export default function TimeBar() {
   const earthUp = row >= 0 ? analysis!.series[row * 6 + 3] > analysis!.series[row * 6 + 4] : null;
 
   return (
-    <div className="panel absolute bottom-[86px] left-1/2 z-20 w-[min(640px,calc(100vw-24px))] -translate-x-1/2 px-3 py-2">
+    <div className="panel absolute bottom-[112px] left-1/2 z-20 w-[min(640px,calc(100vw-24px))] -translate-x-1/2 px-3 py-2">
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -52,8 +53,8 @@ export default function TimeBar() {
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="num text-[12px] text-ink">{fmtUtc(timeMs)}</span>
-            <span className="num text-[11px] text-ink-mute">
+            <span className="num flex items-center gap-1.5 whitespace-nowrap text-[12px] text-ink max-sm:text-[11px]">{fmtUtc(timeMs)} <InfoTip k="timeSlider" /></span>
+            <span className="num whitespace-nowrap text-[11px] text-ink-mute">
               T+{Math.floor(h / 24)} d {h % 24} h
             </span>
           </div>
@@ -80,7 +81,7 @@ export default function TimeBar() {
           aria-label="Playback speed"
           defaultValue={String(playSpeed.value)}
           onChange={(e) => (playSpeed.value = Number(e.target.value))}
-          className="num shrink-0 rounded border border-line bg-[#0b1018] px-1 py-1 text-[11px] text-ink-soft"
+          className="num shrink-0 rounded border border-line bg-[#0b1018] px-1 py-1 text-[11px] text-ink-soft max-sm:hidden"
         >
           {SPEEDS.map((s) => (
             <option key={s} value={s}>{s} h/step</option>

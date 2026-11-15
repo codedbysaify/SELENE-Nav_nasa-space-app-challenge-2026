@@ -1,11 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
 import { BASE_LAYERS, EXAGGERATION_RANGE, type BaseLayer } from "@/lib/lunar-config";
 import { ANALYSIS_RAMP, EARTH_COLOR, ELEVATION_RAMP, SLOPE_MAX_DEG, SLOPE_RAMP, SUN_COLOR, type RampStop } from "@/lib/shaders";
 import { store, useAppStore, type AnalysisLayer } from "@/lib/store";
-import { planData } from "@/lib/planner-actions";
 import { useLunarRegistry } from "@/hooks/useLunarData";
-import { IconChevron, IconLayers } from "./icons";
+import InfoTip from "./InfoTip";
 
 const gradient = (stops: RampStop[]) =>
   `linear-gradient(90deg, ${stops.map((s) => `${s.color} ${(s.t * 100).toFixed(1)}%`).join(", ")})`;
@@ -17,7 +15,7 @@ function Legend({ layer }: { layer: BaseLayer }) {
       <div className="space-y-1.5">
         <div className="h-2 rounded-sm" style={{ background: "linear-gradient(90deg,#1c1c1c,#8a8a8a,#f2f2f2)" }} />
         <p className="text-[11px] leading-snug text-ink-mute">
-          NASA LDEM hillshade, illumination baked in by the source product (sun 45° altitude, 45° azimuth).
+          NASA hillshade (lighting baked in by the source).
         </p>
       </div>
     );
@@ -33,7 +31,7 @@ function Legend({ layer }: { layer: BaseLayer }) {
           <span>0</span>
           <span>+{hi.toFixed(2)} km</span>
         </div>
-        <p className="text-[11px] leading-snug text-ink-mute">Height relative to the 1737.4 km reference sphere.</p>
+        <p className="text-[11px] leading-snug text-ink-mute">Height vs. the 1737.4 km reference sphere.</p>
       </div>
     );
   }
@@ -48,7 +46,7 @@ function Legend({ layer }: { layer: BaseLayer }) {
         ))}
       </div>
       <p className="text-[11px] leading-snug text-ink-mute">
-        LDSM slope. Low slope alone does not make a site suitable for landing.
+        NASA LDSM slope. Flat ≠ automatically safe to land.
       </p>
     </div>
   );
@@ -101,7 +99,7 @@ const ANALYSIS_OPTIONS: { id: AnalysisLayer; label: string; group: "off" | "now"
 function AnalysisLegend({ layer }: { layer: AnalysisLayer }) {
   const missionDays = useAppStore((s) => s.missionDays);
   if (layer === "none") return null;
-  const note = "Terrain horizon from LOLA (1.28 km cells; 80 m inside your ellipse after analysis).";
+  const note = "";
   if (layer === "now-sun")
     return (
       <div className="mt-2 space-y-1">
@@ -109,7 +107,7 @@ function AnalysisLegend({ layer }: { layer: AnalysisLayer }) {
           <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: SUN_COLOR }} /> Sun visible</span>
           <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#05070d] ring-1 ring-white/20" /> In shadow</span>
         </div>
-        <p className="text-[11px] leading-snug text-ink-mute">Sun disc above the local terrain horizon at the selected time. {note}</p>
+        <p className="text-[11px] leading-snug text-ink-mute">Inside your ellipse, at the time on the slider (80 m).{note}</p>
       </div>
     );
   if (layer === "now-earth")
@@ -119,7 +117,7 @@ function AnalysisLegend({ layer }: { layer: AnalysisLayer }) {
           <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: EARTH_COLOR }} /> Earth visible</span>
           <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#2a2d33]" /> Earth hidden</span>
         </div>
-        <p className="text-[11px] leading-snug text-ink-mute">Direct-to-Earth line of sight (Earth&apos;s centre above the horizon, parallax-corrected). {note}</p>
+        <p className="text-[11px] leading-snug text-ink-mute">Direct radio line of sight to Earth, inside your ellipse at the slider time.{note}</p>
       </div>
     );
   const night = layer.endsWith("night");
@@ -135,146 +133,103 @@ function AnalysisLegend({ layer }: { layer: AnalysisLayer }) {
         <span>{hi}</span>
       </div>
       <p className="text-[11px] leading-snug text-ink-mute">
-        {night ? "Longest continuous period with the Sun fully hidden. " : layer.endsWith("sun") ? "Share of hours with the Sun visible (disc-weighted). " : "Share of hours with Earth in direct view. "}
-        {annual ? "Whole year 2027, hourly." : `Over your ${missionDays}-day mission window${planData.stepHours > 1 ? `, every ${planData.stepHours} h` : ", hourly"}.`}
+        {annual ? "Whole year 2027." : `Over your ${missionDays}-day mission.`}
       </p>
     </div>
   );
 }
 
+const GROUP_LABEL = { now: "Inside your ellipse · follows the time slider", mission: "Whole South Pole · your mission", annual: "Whole South Pole · year 2027" } as const;
+
+/** Layer controls (rendered inside the right-hand SidePanel "Layers" tab). */
 export default function LayerSelector() {
   const layer = useAppStore((s) => s.baseLayer);
   const psr = useAppStore((s) => s.psrOverlay);
   const exag = useAppStore((s) => s.exaggeration);
   const analysisLayer = useAppStore((s) => s.analysisLayer);
   const missionReady = useAppStore((s) => s.missionLayersReady);
-  const missionDays = useAppStore((s) => s.missionDays);
-  const meta = useLunarRegistry().meta;
-  const [open, setOpen] = useState(true);
-  // Keep the Moon unobstructed on narrow screens: start collapsed.
-  useEffect(() => {
-    if (window.innerWidth < 1100) setOpen(false);
-  }, []);
-  const psrStats = meta?.psr.stats;
+  const analysed = useAppStore((s) => !!s.analysis && s.planStep === "results");
+  const psrStats = useLunarRegistry().meta?.psr.stats;
 
   return (
-    <section
-      aria-label="Visualisation layers"
-      className="panel w-full"
-    >
+    <div className="space-y-4">
+      <div>
+        <div className="eyebrow mb-2 flex items-center gap-1">Base map <InfoTip k="baseMap" /></div>
+        <div role="radiogroup" aria-label="Base map" className="grid grid-cols-3 gap-1 rounded-md bg-black/30 p-0.5">
+          {BASE_LAYERS.map((l) => (
+            <button
+              key={l.id}
+              type="button"
+              role="radio"
+              aria-checked={layer === l.id}
+              title={l.hint}
+              onClick={() => store.set({ baseLayer: l.id })}
+              className={`h-7 rounded text-[12px] transition-colors ${
+                layer === l.id ? "bg-white/10 text-ink shadow-[inset_0_0_0_1px_rgba(94,200,216,0.45)]" : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2">
+          <Legend layer={layer} />
+        </div>
+      </div>
+
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between px-3.5 py-2.5 text-left"
+        role="switch"
+        aria-checked={psr}
+        onClick={() => store.set({ psrOverlay: !psr })}
+        title={`NASA LPSR map (Barker et al. 2023), 20 m. Mapped permanent shadow, not dark pixels.${
+          psrStats ? ` Covers ${Math.round(psrStats.psr_area_km2).toLocaleString("en-US")} km² (${(psrStats.psr_fraction_of_cap * 100).toFixed(1)}%) of 80–90°S.` : ""
+        }`}
+        className="flex w-full items-center justify-between rounded-md border border-line px-2.5 py-2 text-left transition-colors hover:border-line-strong"
       >
-        <span className="flex items-center gap-2 text-[12px] font-medium text-ink">
-          <IconLayers className="text-accent" /> Layers
+        <span className="flex items-center gap-2">
+          <span className="h-3 w-3 rounded-[3px] border border-white/20" style={{ background: "#a879ff" }} />
+          <span className="text-[12px] text-ink">Permanent shadow (PSR)</span>
         </span>
-        <IconChevron className={`text-ink-mute transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        <span className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${psr ? "bg-psr/80" : "bg-white/12"}`}>
+          <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${psr ? "left-3.5" : "left-0.5"}`} />
+        </span>
       </button>
 
-      {open && (
-        <div className="enter space-y-4 border-t border-line px-3.5 pb-3.5 pt-3">
-          <div>
-            <div className="eyebrow mb-2">Base layer</div>
-            <div role="radiogroup" aria-label="Base layer" className="grid grid-cols-3 gap-1 rounded-md bg-black/30 p-0.5">
-              {BASE_LAYERS.map((l) => (
-                <button
-                  key={l.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={layer === l.id}
-                  title={l.hint}
-                  onClick={() => store.set({ baseLayer: l.id })}
-                  className={`h-7 rounded text-[12px] transition-colors ${
-                    layer === l.id ? "bg-white/10 text-ink shadow-[inset_0_0_0_1px_rgba(94,200,216,0.45)]" : "text-ink-soft hover:text-ink"
-                  }`}
-                >
-                  {l.label}
-                </button>
+      <div>
+        <span className="eyebrow mb-2 flex items-center gap-1"><label htmlFor="analysis-layer">Sun &amp; Earth</label> <InfoTip k="sunEarthLayer" /></span>
+        <select
+          id="analysis-layer"
+          value={analysisLayer}
+          onChange={(e) => store.set({ analysisLayer: e.target.value as AnalysisLayer })}
+          className="w-full rounded border border-line bg-[#0b1018] px-2 py-1.5 text-[12px] text-ink outline-none focus:border-accent/60"
+        >
+          <option value="none">Off</option>
+          {(["now", "mission", "annual"] as const).map((g) => (
+            <optgroup key={g} label={GROUP_LABEL[g] + ((g === "mission" && !missionReady) || (g === "now" && !analysed) ? " (analyse an ellipse first)" : "")}>
+              {ANALYSIS_OPTIONS.filter((o) => o.group === g).map((o) => (
+                <option key={o.id} value={o.id} disabled={(g === "mission" && !missionReady) || (g === "now" && !analysed)}>
+                  {o.label}
+                </option>
               ))}
-            </div>
-            <div className="mt-2.5">
-              <Legend layer={layer} />
-            </div>
-          </div>
+            </optgroup>
+          ))}
+        </select>
+        <AnalysisLegend layer={analysisLayer} />
+      </div>
 
-          <div>
-            <div className="eyebrow mb-2">Overlay</div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={psr}
-              onClick={() => store.set({ psrOverlay: !psr })}
-              className="flex w-full items-center justify-between rounded-md border border-line px-2.5 py-2 text-left transition-colors hover:border-line-strong"
-            >
-              <span className="flex items-center gap-2">
-                <span className="h-3 w-3 rounded-[3px] border border-white/20" style={{ background: "#a879ff" }} />
-                <span className="text-[12px] text-ink">Permanently shadowed regions</span>
-              </span>
-              <span className={`relative h-4 w-7 rounded-full transition-colors ${psr ? "bg-psr/80" : "bg-white/12"}`}>
-                <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${psr ? "left-3.5" : "left-0.5"}`} />
-              </span>
-            </button>
-            <p className="mt-1.5 text-[11px] leading-snug text-ink-mute">
-              LPSR map (Barker et al. 2023), 20 m source. Not the same as dark terrain in the shading.
-              {psrStats && (
-                <>
-                  {" "}
-                  PSRs cover <span className="num text-ink-soft">{Math.round(psrStats.psr_area_km2).toLocaleString("en-US")} km²</span> (
-                  <span className="num text-ink-soft">{(psrStats.psr_fraction_of_cap * 100).toFixed(2)}%</span>) of 80–90°S.
-                </>
-              )}
-            </p>
-          </div>
-
-          <div>
-            <div className="eyebrow mb-2">Sun &amp; Earth analysis</div>
-            <div role="radiogroup" aria-label="Sun and Earth analysis layer" className="space-y-0.5">
-              {ANALYSIS_OPTIONS.map((o) => {
-                const disabled = o.group === "mission" && !missionReady;
-                return (
-                  <button
-                    key={o.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={analysisLayer === o.id}
-                    disabled={disabled}
-                    onClick={() => store.set({ analysisLayer: o.id })}
-                    className={`flex w-full items-center justify-between rounded px-2 py-1 text-left text-[12px] transition-colors disabled:opacity-35 ${
-                      analysisLayer === o.id ? "bg-white/10 text-ink" : "text-ink-soft hover:bg-white/5 hover:text-ink"
-                    }`}
-                  >
-                    <span>{o.label}</span>
-                    <span className="text-[10px] text-ink-mute">
-                      {o.group === "mission" ? (missionReady ? `${missionDays} d mission` : "after analysis") : o.group === "annual" ? "2027" : o.group === "now" ? "selected time" : ""}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <AnalysisLegend layer={analysisLayer} />
-          </div>
-
-          <div className="space-y-2.5">
-            <div className="eyebrow">Rendering</div>
-            <Slider
-              label="Vertical exaggeration"
-              value={exag}
-              min={EXAGGERATION_RANGE[0]}
-              max={EXAGGERATION_RANGE[1]}
-              step={0.25}
-              format={(v) => (v === 1 ? "1.00× true scale" : `${v.toFixed(2)}× visual`)}
-              onChange={(v) => store.set({ exaggeration: v })}
-            />
-            <p className="text-[11px] leading-snug text-ink-mute">
-              Exaggeration is visual only; read-outs show true LOLA values. 3D lighting uses the real Sun position for
-              the selected time.
-            </p>
-          </div>
-        </div>
-      )}
-    </section>
+      <div>
+        <Slider
+          label="Vertical exaggeration"
+          value={exag}
+          min={EXAGGERATION_RANGE[0]}
+          max={EXAGGERATION_RANGE[1]}
+          step={0.25}
+          format={(v) => (v === 1 ? "1× true" : `${v.toFixed(2)}×`)}
+          onChange={(v) => store.set({ exaggeration: v })}
+        />
+        <p className="flex items-center gap-1 text-[11px] text-ink-mute">Visual only. Numbers are always true values. <InfoTip k="exaggeration" /></p>
+      </div>
+    </div>
   );
 }
